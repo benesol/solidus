@@ -2,10 +2,12 @@ module Spree
   # Spree::PermittedAttributes contains the attributes permitted through strong
   # params in various controllers in the frontend. Extensions and stores that
   # need additional params to be accepted can mutate these arrays to add them.
+  # This module appears to be used by the API as well.
   module PermittedAttributes
     ATTRIBUTES = [
       :address_attributes,
       :address_book_attributes,
+      :adjustment_attributes,
       :checkout_attributes,
       :credit_card_update_attributes,
       :customer_return_attributes,
@@ -43,6 +45,8 @@ module Spree
     ]
 
     @@address_book_attributes = address_attributes + [:default]
+
+    @@adjustment_attributes = [:amount, :label, :source_type]
 
     @@checkout_attributes = [
       :coupon_code, :email, :special_instructions, :use_billing

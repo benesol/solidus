@@ -14,6 +14,9 @@ module Spree
       class_attribute :admin_line_item_attributes
       self.admin_line_item_attributes = [:price, :variant_id, :sku]
 
+      class_attribute :admin_adjustment_attributes
+      self.admin_adjustment_attributes = [:amount, :label, :source_type]
+
       attr_accessor :current_api_user
 
       class_attribute :error_notifier
@@ -36,6 +39,15 @@ module Spree
       def permitted_line_item_attributes
         if can?(:admin, Spree::LineItem)
           super + admin_line_item_attributes
+        else
+          super
+        end
+      end
+
+      # users should be able create adjustments (such as tax) via api
+      def permitted_adjustment_attributes
+        if can?(:admin, Spree::Adjustment)
+          super + admin_adjustment_attributes
         else
           super
         end
