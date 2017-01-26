@@ -118,7 +118,8 @@ module Spree
               order:  order,
               amount: a[:amount].to_f,
               label:  a[:label],
-              source_type: a[:source_type]
+              source_type: a[:source_type],
+              source_id: 1
             )
             adjustment.save!
             adjustment.finalize!
