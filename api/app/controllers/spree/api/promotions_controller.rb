@@ -4,8 +4,6 @@ module Spree
       before_action :requires_admin
       before_action :load_promotion
 
-      create.before :build_promotion_codes
-
       helper 'spree/promotion_rules'
 
       def create
