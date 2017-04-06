@@ -2,6 +2,7 @@ module Spree
   module Api
     class PromotionsController < Spree::Api::ResourceController
       before_action :requires_admin
+      before_action :load_promotion, except: [:create]
 
       helper 'spree/promotion_rules'
 
@@ -9,7 +10,7 @@ module Spree
         authorize! :create, Promotion
         # Use core:app:models:spree:promotion_builder.rb to create promotion
         @promotion_builder = Spree::PromotionBuilder.new(
-          permitted_promo_builder_params.merge(user: try_spree_current_user),
+          permitted_promo_builder_params,
           permitted_resource_params
         )
         @promotion = @promotion_builder.promotion
