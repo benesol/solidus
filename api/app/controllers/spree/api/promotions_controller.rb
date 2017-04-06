@@ -2,7 +2,6 @@ module Spree
   module Api
     class PromotionsController < Spree::Api::ResourceController
       before_action :requires_admin
-      before_action :load_promotion
 
       helper 'spree/promotion_rules'
 
