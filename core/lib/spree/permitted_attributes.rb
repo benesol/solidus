@@ -81,7 +81,7 @@ module Spree
       :taxon_ids, :option_type_ids, :cost_currency, :cost_price]
 
     @@promotion_attributes = [
-      :id, :name, :description, :base_code, :expires_at, :starts_at, :type, :usage_limit,
+      :id, :name, :description, :expires_at, :starts_at, :type, :usage_limit,
       :match_policy, :advertise, :path
     ]
 
