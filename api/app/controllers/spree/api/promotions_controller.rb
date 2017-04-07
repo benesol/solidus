@@ -6,6 +6,9 @@ module Spree
 
       helper 'spree/promotion_rules'
 
+      class_attribute :admin_promotion_attributes
+      self.admin_promotion_attributes = [:name, :base_code, :path, :usage_limit, :per_code_usage_limit, :description]
+
       def create
         authorize! :create, Promotion
         # Use core:app:models:spree:promotion_builder.rb to create promotion
@@ -39,6 +42,10 @@ module Spree
 
       def load_promotion
         @promotion = Spree::Promotion.find_by_id(params[:id]) || Spree::Promotion.with_coupon_code(params[:id])
+      end
+
+      def permitted_promotion_attributes
+        can?(:admin, Spree::Promotion) ? (super + admin_promotion_attributes) : super
       end
 
       def permitted_promo_builder_params
