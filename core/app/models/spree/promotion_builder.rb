@@ -1,6 +1,8 @@
 class Spree::PromotionBuilder
   include ActiveModel::Model
 
+  require 'pp'
+
   attr_reader :promotion
   attr_accessor :base_code, :number_of_codes, :user
 
@@ -19,7 +21,7 @@ class Spree::PromotionBuilder
   def initialize(attributes = {}, promotion_attributes = {})
     @promotion = Spree::Promotion.new(promotion_attributes)
     super(attributes)
-    Rails.logger.info "initializing PromotionBuilder, attributes: #{attributes}, promotion_attributes: #{promotion_attributes}"
+    Rails.logger.info "initializing PromotionBuilder, attributes: #{attributes}, promotion_attributes: #{promotion_attributes.pretty_inspect()}"
   end
 
   def perform
