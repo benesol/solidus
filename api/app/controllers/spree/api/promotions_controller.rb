@@ -7,11 +7,13 @@ module Spree
       helper 'spree/promotion_rules'
 
       class_attribute :admin_promotion_attributes
-      self.admin_promotion_attributes = [:name, :base_code, :path, :usage_limit, :per_code_usage_limit, :description]
+      self.admin_promotion_attributes = [:name, :path, :usage_limit, :per_code_usage_limit, :description]
+      # From api_helpers: :id, :name, :description, :expires_at, :starts_at, :type, :usage_limit, :match_policy, :advertise, :path
 
       def create
         authorize! :create, Promotion
         # Use core:app:models:spree:promotion_builder.rb to create promotion
+        # TODO: Remove 'base_code' from params passed as 'permitted_resource_params'?
         @promotion_builder = Spree::PromotionBuilder.new(
           permitted_promo_builder_params,
           permitted_resource_params
