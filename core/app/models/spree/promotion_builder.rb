@@ -19,12 +19,12 @@ class Spree::PromotionBuilder
   def initialize(attributes = {}, promotion_attributes = {})
     @promotion = Spree::Promotion.new(promotion_attributes)
     super(attributes)
-    logger.info "initializing PromotionBuilder, attributes: #{attributes}, promotion_attributes: #{promotion_attributes}"
+    Rails.logger.info "initializing PromotionBuilder, attributes: #{attributes}, promotion_attributes: #{promotion_attributes}"
   end
 
   def perform
     if can_build_codes?
-      logger.info "building #{number_of_codes} promotion codes"
+      Rails.logger.info "building #{number_of_codes} promotion codes"
       @promotion.codes = code_builder.build_promotion_codes
     end
 
