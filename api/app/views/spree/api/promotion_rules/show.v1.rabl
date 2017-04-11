@@ -1,2 +1,2 @@
 object @promotion_rule
-attributes *promotion_rule_attributes
+attributes :id, :type
