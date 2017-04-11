@@ -90,15 +90,7 @@ module Spree
     ]
 
     @@promotion_rule_attributes = [
-      :type
-    ]
-
-    @@product_promotion_rule_attributes = [
-      :promotion_rule_id, :product_id
-    ]
-
-    @@user_promotion_rule_attributes = [
-      :promotion_rule_id, :user_id
+      :type, :product_id, :user_id
     ]
 
     @@property_attributes = [:name, :presentation]
