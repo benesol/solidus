@@ -21,7 +21,7 @@ class Spree::PromotionBuilder
   def initialize(attributes = {}, promotion_attributes = {})
     @promotion = Spree::Promotion.new(promotion_attributes)
     super(attributes)
-    Rails.logger.info "initializing PromotionBuilder, attributes: #{attributes}, promotion_attributes: #{promotion_attributes.pretty_inspect()}"
+    Rails.logger.info "initializing PromotionBuilder, attributes: #{attributes.pretty_inspect()}, promotion_attributes: #{promotion_attributes.pretty_inspect()}"
   end
 
   def perform

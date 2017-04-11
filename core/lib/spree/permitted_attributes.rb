@@ -85,6 +85,22 @@ module Spree
       :match_policy, :advertise, :path
     ]
 
+    @@promotion_action_attributes = [
+      :action_type
+    ]
+
+    @@promotion_rule_attributes = [
+      :type
+    ]
+
+    @@product_promotion_rule_attributes = [
+      :promotion_rule_id, :product_id
+    ]
+
+    @@user_promotion_rule_attributes = [
+      :promotion_rule_id, :user_id
+    ]
+
     @@property_attributes = [:name, :presentation]
 
     @@return_authorization_attributes = [:memo, :stock_location_id, :return_reason_id, return_items_attributes: [:inventory_unit_id, :exchange_variant_id, :return_reason_id]]
