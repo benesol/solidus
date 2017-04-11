@@ -11,18 +11,12 @@ module Spree
         if @promotion_action.save
           respond_with(@promotion_action, status: 201, default_template: :show)
         end
-        respond_to do |format|
-          format.js   { render layout: false }
-        end
       end
 
       def destroy
         @promotion_action = @promotion.promotion_actions.find(params[:id])
         if @promotion_action.destroy
-          flash[:success] = Spree.t(:successfully_removed, resource: Spree.t(:promotion_action))
-        end
-        respond_to do |format|
-          format.js   { render layout: false }
+          respond_with(:promotion_action, status: 204)
         end
       end
 
@@ -40,9 +34,6 @@ module Spree
         end
         if !@promotion_action_type
           respond_with(@promotion_action, status: 204)
-          respond_to do |format|
-            format.js   { render layout: false }
-          end
         end
       end
     end

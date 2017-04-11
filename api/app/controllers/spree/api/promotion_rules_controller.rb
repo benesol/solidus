@@ -12,9 +12,6 @@ module Spree
         if @promotion_rule.save
           respond_with(@promotion_rule, status: 201, default_template: :show)
         end
-        respond_to do |format|
-          format.js   { render layout: false }
-        end
       end
 
       def destroy
@@ -37,9 +34,8 @@ module Spree
           klass.name == requested_type
         end
         if !@promotion_rule_type
-          respond_to do |format|
-            format.js   { render layout: false }
-          end
+          # TODO: Send reasonable error response?
+          invalid_resource!(@promotion_rule_type)
         end
       end
     end
