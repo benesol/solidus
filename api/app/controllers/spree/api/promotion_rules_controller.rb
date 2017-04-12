@@ -7,6 +7,11 @@ module Spree
       before_action :validate_promotion_rule_type, only: :create
 
       def create
+        # TODO: This is causing an error due to product_id / user_id getting passed.
+        #       Figure-out how best to do this.  Might need API calls to add product/user IDs,
+        #       say, POST to '/api/promotions/<id>/promotion_rules/<id>/users' or
+        #       '/api/promotions/<id>/promotion_rules/<id>/products'.  OR... figure-out
+        #       how Solidus Admin API achieves this functionality.
         @promotion_rule = @promotion_rule_type.new(params[:promotion_rule])
         @promotion_rule.promotion = @promotion
         if @promotion_rule.save
