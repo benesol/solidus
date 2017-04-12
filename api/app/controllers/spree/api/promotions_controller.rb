@@ -3,6 +3,7 @@ module Spree
     class PromotionsController < Spree::Api::ResourceController
       before_action :requires_admin
       before_action :load_promotion, except: [:create]
+      before_action :load_data, except: [:create]
 
       helper 'spree/promotion_rules'
 
@@ -13,7 +14,6 @@ module Spree
       def create
         authorize! :create, Promotion
         # Use core:app:models:spree:promotion_builder.rb to create promotion
-        # TODO: Remove 'base_code' from params passed as 'permitted_resource_params'?
         @promotion_builder = Spree::PromotionBuilder.new(
           permitted_promo_builder_params,
           permitted_resource_params
@@ -44,6 +44,11 @@ module Spree
 
       def load_promotion
         @promotion = Spree::Promotion.find_by_id(params[:id]) || Spree::Promotion.with_coupon_code(params[:id])
+      end
+
+      def load_data
+        @calculators = Rails.application.config.spree.calculators.promotion_actions_create_adjustments
+        @promotion_categories = Spree::PromotionCategory.order(:name)
       end
 
       def permitted_promotion_attributes
