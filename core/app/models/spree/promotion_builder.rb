@@ -18,10 +18,15 @@ class Spree::PromotionBuilder
   # @param promotion_attrs [Hash] The desired attributes for the newly promotion
   # @param attributes [Hash] The desired attributes for this builder
   # @param user [Spree::User] The user who triggered this promotion build
-  def initialize(attributes = {}, promotion_attributes = {})
+  def initialize(attributes = {}, promotion_attributes = {}, promotion_rules: {}, promotion_actions: {})
     @promotion = Spree::Promotion.new(promotion_attributes)
     super(attributes)
-    Rails.logger.info "initializing PromotionBuilder, attributes: #{attributes.pretty_inspect()}, promotion_attributes: #{promotion_attributes.pretty_inspect()}"
+
+    logMsg = "initializing PromotionBuilder, attributes: #{attributes.pretty_inspect()}, "
+    logMsg << "promotion_attributes: #{promotion_attributes.pretty_inspect()}, "
+    logMsg << "promotion_rules: #{promotion_rules.pretty_inspect()}, "
+    logMsg << "promotion_actions: #{promotion_actions.pretty_inspect()}"
+    Rails.logger.info logMsg
   end
 
   def perform
