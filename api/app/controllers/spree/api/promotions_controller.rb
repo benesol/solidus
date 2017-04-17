@@ -16,7 +16,9 @@ module Spree
         # Use core:app:models:spree:promotion_builder.rb to create promotion
         @promotion_builder = Spree::PromotionBuilder.new(
           permitted_promo_builder_params,
-          permitted_resource_params
+          permitted_resource_params,
+          permitted_promotion_rules_params,
+          permitted_promotion_actions_params
         )
         @promotion = @promotion_builder.promotion
 
@@ -58,6 +60,22 @@ module Spree
       def permitted_promo_builder_params
         if params[:promotion_builder]
           params[:promotion_builder].permit(:base_code, :number_of_codes)
+        else
+          {}
+        end
+      end
+
+      def permitted_promotion_rules_params
+        if params[:promotion_rules]
+          params[:promotion_rules].permit( [ :type, :product_ids_string, :preferred_match_policy, :user_id ] )
+        else
+          {}
+        end
+      end
+
+      def permitted_promotion_actions_params
+        if params[:promotion_actions]
+          params[:promotion_actions].permit( [ :type, calculators: [ :type, :calculable_type, :percentage ]  ] )
         else
           {}
         end
