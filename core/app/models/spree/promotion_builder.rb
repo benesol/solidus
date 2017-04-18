@@ -53,7 +53,7 @@ class Spree::PromotionBuilder
     unless @promotion_actions.nil? || @promotion_actions.length == 0
       Rails.logger.debug "creating #{@promotion_actions.length} promotion actions"
       @promotion_actions.each do |action_key, action_value|
-        Rails.logger.debug "Would have created promotion action of type: #{action_value[:type]}"
+        Rails.logger.debug "Would have created promotion action of type: #{action_value[:type]} ( calculators: #{@promotion_actions[:calculators].pretty_print_inspect()} )"
         unless @promotion_actions[:calculators].nil? || @promotion_actions[:calculators].length == 0
           calculator_type = nil
           calculable_type = nil
