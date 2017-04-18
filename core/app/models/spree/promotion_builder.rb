@@ -44,7 +44,7 @@ class Spree::PromotionBuilder
       Rails.logger.debug "creating #{@promotion_rules.length} promotion rules"
       @promotion_rules.each do |key, value|
         Rails.logger.debug "Would have created promotion rule of type: #{value[:type]}"
-        promo_rule = Spree::PromotionRule.new(promo_rule_attributes)
+        # promo_rule = Spree::PromotionRule.new(promo_rule_attributes)
       end
     else
       warnMsg << "Rules"
