@@ -40,7 +40,6 @@ class Spree::PromotionBuilder
     warnMsg = "Created a Promotion consisting of codes: (#{@promotion.codes.pretty_inspect()}) without "
     sendWarnMsg = false
 
-    # TODO: Build promotion rules, actions, calculators, as necessary.
     unless @promotion_rules.nil? || @promotion_rules.length == 0
       Rails.logger.debug "creating #{@promotion_rules.length} promotion rules"
       @promotion_rules.each do |key, value|
@@ -72,9 +71,11 @@ class Spree::PromotionBuilder
             end
           end
 
+          Rails.logger.debug "calculator_type: #{calculator_type}, calculable_type: #{calculable_type}, calculator_percentage: #{calculator_percentage}"
+
           unless calculator_type.nil? || calculator_type != "Spree::Calculator::PercentOnLineItem" || \
             calculable_type.nil? || calculable_type != "Spree::PromotionAction" || calculator_percentage.nil?
-            
+
             daMsg = "Would have created promotion action calculator of type: #{calculator_type}, "
             daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator.percentage}"
 
