@@ -68,7 +68,7 @@ module Spree
       def permitted_promotion_rules_params
         Rails.logger.info("params[:promotion_rules]: #{params[:promotion_rules].pretty_inspect()}")
         if params[:promotion_rules]
-          params[:promotion_rules].permit( [ :type, :product_ids_string, :preferred_match_policy, :user_id ] )
+          params.permit( promotion_rules: [ :type, :product_ids_string, :preferred_match_policy, :user_id ] )
         else
           {}
         end
