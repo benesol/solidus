@@ -79,7 +79,7 @@ module Spree
         Rails.logger.info("params[:promotion_actions]: #{params[:promotion_actions].pretty_inspect()}")
         if params[:promotion_actions]
           permitted = params.permit( promotion_actions: [ :type, :calculators => [ :type, :calculable_type, :percentage ]  ] )
-          permitted[:promotion_rules]
+          permitted[:promotion_actions]
         else
           {}
         end
