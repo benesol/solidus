@@ -44,7 +44,7 @@ class Spree::PromotionBuilder
       Rails.logger.debug "creating #{@promotion_rules.length} promotion rules"
       @promotion_rules.each do |key, value|
         Rails.logger.debug "Would have created promotion rule of type: #{value[:type]}"
-        # promo_rule = Spree::PromotionRule.new(promo_rule_attributes)
+        promo_rule = Spree::PromotionRule.new(value)
       end
     else
       warnMsg << "Rules"
@@ -60,15 +60,17 @@ class Spree::PromotionBuilder
           calculable_type = nil
           calculator_percentage = nil
 
-          action_value[:calculators].each do |calc_key, calc_value|
-            if calc_key == "type"
-              calculator_type = calc_value
-            elsif calc_key == "calculable_type"
-              calculable_type = calc_value
-            elsif calc_key == "percentage"
-              calculator_percentage = calc_value
-            else
-              Rails.logger.warn "Don't handle Promotion Action calculator attribute #{calc_key}"
+          action_value[:calculators].each do |calcs_key, calcs_value|
+            calcs_value.each do |calc_key, calc_value|
+              if calc_key == "type"
+                calculator_type = calc_value
+              elsif calc_key == "calculable_type"
+                calculable_type = calc_value
+              elsif calc_key == "percentage"
+                calculator_percentage = calc_value
+              else
+                Rails.logger.warn "Don't handle Promotion Action calculator attribute #{calc_key}"
+              end
             end
           end
 
