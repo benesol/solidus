@@ -35,6 +35,37 @@ class Spree::PromotionBuilder
       @promotion.codes = code_builder.build_promotion_codes
     end
 
+    warnMsg = "Created a Promotion consisting of codes: (#{@promotion.codes.pretty_inspect()}) without "
+    sendWarnMsg = false
+
+    # TODO: Build promotion rules, actions, calculators, as necessary.
+    if promotion_rules.length > 0
+      Rails.logger.debug "creating #{promotion_rules.length} promotion rules"
+      promotion_rules.each do |key, value|
+        Rails.logger.debug "Would have created promotion rule of type: #{value[:type]}"
+      end
+    else
+      warnMsg << "Rules"
+      sendWarnMsg = true
+    end
+
+    if promotion_actions.length > 0
+      Rails.logger.debug "creating #{promotion_actions.length} promotion actions"
+      promotion_actions.each do |key, value|
+        Rails.logger.debug "Would have created promotion action of type: #{value[:type]}"
+      end
+    else
+      if sendWarnMsg
+        warnMsg << ", "
+      end
+      warnMsg << "Actions"
+      sendWarnMsg = true
+    end
+
+    if sendWarnMsg
+      Rails.logger.warn warnMsg
+    end
+
     return false unless valid?
 
     @promotion.save

@@ -66,7 +66,7 @@ module Spree
       end
 
       def permitted_promotion_rules_params
-        Rails.logger.info("params[:promotion_rules]: #{params[:promotion_rules].pretty_inspect()}")
+        Rails.logger.info "params[:promotion_rules]: #{params[:promotion_rules].pretty_inspect()}"
         if params[:promotion_rules]
           permitted = params.permit( promotion_rules: [ :type, :product_ids_string, :preferred_match_policy, :user_id ] )
           permitted[:promotion_rules]
@@ -78,7 +78,8 @@ module Spree
       def permitted_promotion_actions_params
         Rails.logger.info("params[:promotion_actions]: #{params[:promotion_actions].pretty_inspect()}")
         if params[:promotion_actions]
-          params[:promotion_actions].permit( [ :type, calculators: [ :type, :calculable_type, :percentage ]  ] )
+          permitted = params.permit( promotion_actions: [ :type, calculators: [ :type, :calculable_type, :percentage ]  ] )
+          permitted[:promotion_rules]
         else
           {}
         end
