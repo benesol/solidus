@@ -21,6 +21,8 @@ class Spree::PromotionBuilder
   def initialize(attributes = {}, promotion_attributes = {}, promotion_rules = {}, promotion_actions = {})
     @promotion = Spree::Promotion.new(promotion_attributes)
     super(attributes)
+    @promotion_rules = promotion_rules
+    @promotion_actions = promotion_actions
 
     logMsg = "initializing PromotionBuilder, attributes: #{attributes.pretty_inspect()}, "
     logMsg << "promotion_attributes: #{promotion_attributes.pretty_inspect()}, "
@@ -39,9 +41,9 @@ class Spree::PromotionBuilder
     sendWarnMsg = false
 
     # TODO: Build promotion rules, actions, calculators, as necessary.
-    if promotion_rules.length > 0
-      Rails.logger.debug "creating #{promotion_rules.length} promotion rules"
-      promotion_rules.each do |key, value|
+    if @promotion_rules.length > 0
+      Rails.logger.debug "creating #{@promotion_rules.length} promotion rules"
+      @promotion_rules.each do |key, value|
         Rails.logger.debug "Would have created promotion rule of type: #{value[:type]}"
       end
     else
@@ -49,9 +51,9 @@ class Spree::PromotionBuilder
       sendWarnMsg = true
     end
 
-    if promotion_actions.length > 0
-      Rails.logger.debug "creating #{promotion_actions.length} promotion actions"
-      promotion_actions.each do |key, value|
+    if @promotion_actions.length > 0
+      Rails.logger.debug "creating #{@promotion_actions.length} promotion actions"
+      @promotion_actions.each do |key, value|
         Rails.logger.debug "Would have created promotion action of type: #{value[:type]}"
       end
     else
