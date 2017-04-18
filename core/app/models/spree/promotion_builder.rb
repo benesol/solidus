@@ -53,8 +53,34 @@ class Spree::PromotionBuilder
 
     unless @promotion_actions.nil? || @promotion_actions.length == 0
       Rails.logger.debug "creating #{@promotion_actions.length} promotion actions"
-      @promotion_actions.each do |key, value|
-        Rails.logger.debug "Would have created promotion action of type: #{value[:type]}"
+      @promotion_actions.each do |action_key, action_value|
+        Rails.logger.debug "Would have created promotion action of type: #{action_value[:type]}"
+        unless @promotion_actions[:calculators].nil? || @promotion_actions[:calculators].length == 0
+          calculator_type = nil
+          calculable_type = nil
+          calculator_percentage = nil
+
+          @promotion_actions[:calculators].each do |calc_key, calc_value|
+            if calc_key == "type"
+              calculator_type = calc_value
+            elsif calc_key == "calculable_type"
+              calculable_type = calc_value
+            elsif calc_key == "percentage"
+              calculator_percentage = calc_value
+            else
+              Rails.logger.warn "Don't handle Promotion Action calculator attribute #{calc_key}"
+            end
+          end
+
+          unless calculator_type.nil? || calculator_type != "Spree::Calculator::PercentOnLineItem" || \
+            calculable_type.nil? || calculable_type != "Spree::PromotionAction" || calculator_percentage.nil?
+            
+            daMsg = "Would have created promotion action calculator of type: #{calculator_type}, "
+            daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator.percentage}"
+
+            Rails.logger.debug daMsg
+          end
+        end
       end
     else
       if sendWarnMsg
