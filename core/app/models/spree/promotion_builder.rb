@@ -106,7 +106,7 @@ class Spree::PromotionBuilder
             #daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator_percentage}"
             #Rails.logger.debug daMsg
 
-            Rail.logger.debug "Created promotion action calculator: #{promotion_action_calculator.pretty_inspect()}"
+            Rails.logger.debug "Created promotion action calculator: #{promotion_action_calculator.pretty_inspect()}"
           end
         end
       end
