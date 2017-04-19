@@ -44,7 +44,9 @@ class Spree::PromotionBuilder
       Rails.logger.debug "creating #{@promotion_rules.length} promotion rules"
       @promotion_rules.each do |key, value|
         Rails.logger.debug "Would have created promotion rule of type: #{value[:type]}"
-        promo_rule = Spree::PromotionRule.new(value)
+        #promo_rule = Spree::PromotionRule.new(value)
+        @promotion.promotion_rules.create(value)
+        #Rails.logger.debug "Here's preview of promotion rule: #{promo_rule.pretty_inspect()}"
       end
     else
       warnMsg << "Rules"
@@ -80,7 +82,7 @@ class Spree::PromotionBuilder
             calculable_type.nil? || calculable_type != "Spree::PromotionAction" || calculator_percentage.nil?
 
             daMsg = "Would have created promotion action calculator of type: #{calculator_type}, "
-            daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator.percentage}"
+            daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator_percentage}"
 
             Rails.logger.debug daMsg
           end
