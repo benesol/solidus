@@ -41,6 +41,7 @@ class Spree::PromotionBuilder
     sendWarnMsg = false
 
     unless @promotion_rules.nil? || @promotion_rules.length == 0
+      @promotion.save
       Rails.logger.debug "creating #{@promotion_rules.length} promotion rules"
       @promotion_rules.each do |key, value|
         Rails.logger.debug "Would have created promotion rule of type: #{value[:type]}"
