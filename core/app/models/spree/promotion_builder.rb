@@ -2,6 +2,7 @@ class Spree::PromotionBuilder
   include ActiveModel::Model
 
   require 'pp'
+  require 'bigdecimal'
 
   attr_reader :promotion
   attr_accessor :base_code, :number_of_codes, :user
@@ -81,7 +82,7 @@ class Spree::PromotionBuilder
               elsif calc_key == "calculable_type"
                 calculable_type = calc_value
               elsif calc_key == "percentage"
-                calculator_percentage = calc_value
+                calculator_percentage = BigDecimal.new(calc_value)
               else
                 Rails.logger.warn "Don't handle Promotion Action calculator attribute #{calc_key}"
               end
