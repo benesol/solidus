@@ -94,6 +94,10 @@ class Spree::PromotionBuilder
           unless calculator_type.nil? || calculator_type != "Spree::Calculator::PercentOnLineItem" || \
             calculable_type.nil? || calculable_type != "Spree::PromotionAction" || calculator_percentage.nil?
 
+            # TODO: delete the default-created calculator.
+            Spree::Calculator::PercentOnLineItem.where( \
+              calculable_type: "Spree::PromotionAction", calculable_id: promotion_action.id).delete_all
+
             # Percentage is stored in 'preferences' column as such:
             # "---
             # :percent: !ruby/object:BigDecimal 18:0.24E2
@@ -103,7 +107,6 @@ class Spree::PromotionBuilder
 
             promotion_action_calculator = Spree::Calculator::PercentOnLineItem.new(calculator_attrs)
             promotion_action.save
-            # Results in 2 calculators.  Is promotion_action creating default calculator with 0% discount?
             promotion_action_calculator.save
 
             #daMsg = "Would have created promotion action calculator of type: #{calculator_type}, "
