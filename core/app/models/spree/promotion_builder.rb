@@ -98,7 +98,7 @@ class Spree::PromotionBuilder
             # :percent: !ruby/object:BigDecimal 18:0.24E2
             # "
             calculator_attrs = { "type" => calculator_type, "calculable_type" => calculable_type, \
-              "calculable_id" => promotion_action.id, "percent" => calculator_percentage }
+              "calculable_id" => promotion_action.id, "preferred_percent" => calculator_percentage }
 
             promotion_action_calculator = Spree::Calculator::PercentOnLineItem.new(calculator_attrs)
 
