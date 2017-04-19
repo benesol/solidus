@@ -103,6 +103,7 @@ class Spree::PromotionBuilder
 
             promotion_action_calculator = Spree::Calculator::PercentOnLineItem.new(calculator_attrs)
             promotion_action.save
+            # Results in 2 calculators.  Is promotion_action creating default calculator with 0% discount?
             promotion_action_calculator.save
 
             #daMsg = "Would have created promotion action calculator of type: #{calculator_type}, "
