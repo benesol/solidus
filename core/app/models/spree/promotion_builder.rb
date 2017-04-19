@@ -40,8 +40,12 @@ class Spree::PromotionBuilder
     warnMsg = "Created a Promotion consisting of codes: (#{@promotion.codes.pretty_inspect()}) without "
     sendWarnMsg = false
 
-    unless @promotion_rules.nil? || @promotion_rules.length == 0
+    unless ( @promotion_rules.nil? || @promotion_rules.length == 0 ) && \
+      ( @promotion_actions.nil? || @promotion_actions.length == 0 )
       @promotion.save
+    end
+
+    unless @promotion_rules.nil? || @promotion_rules.length == 0
       Rails.logger.debug "creating #{@promotion_rules.length} promotion rules"
       @promotion_rules.each do |key, value|
         promotion_rule = @promotion.promotion_rules.create(value)
@@ -60,7 +64,11 @@ class Spree::PromotionBuilder
     unless @promotion_actions.nil? || @promotion_actions.length == 0
       Rails.logger.debug "creating #{@promotion_actions.length} promotion actions"
       @promotion_actions.each do |action_key, action_value|
-        Rails.logger.debug "Would have created promotion action of type: #{action_value[:type]}"
+        promotion_action_attrs = { "type" => action_value[:type] }
+        promotion_action = @promotion.promotion_actions.create(promotion_action_attrs)
+
+        Rails.logger.debug "Created promotion action: #{promotion_action.pretty_inspect()}"
+
         unless action_value[:calculators].nil? || action_value[:calculators].length == 0
           calculator_type = nil
           calculable_type = nil
@@ -85,10 +93,20 @@ class Spree::PromotionBuilder
           unless calculator_type.nil? || calculator_type != "Spree::Calculator::PercentOnLineItem" || \
             calculable_type.nil? || calculable_type != "Spree::PromotionAction" || calculator_percentage.nil?
 
-            daMsg = "Would have created promotion action calculator of type: #{calculator_type}, "
-            daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator_percentage}"
+            # Percentage is stored in 'preferences' column as such:
+            # "---
+            # :percent: !ruby/object:BigDecimal 18:0.24E2
+            # "
+            calculator_attrs = { "type" => calculator_type, "calculable_type" => calculable_type, \
+              "calculable_id" => promotion_action.id, "percent_per_item" => calculator_percentage }
 
-            Rails.logger.debug daMsg
+            promotion_action_calculator = Spree::Calculator::PercentOnLineItem.new(calculator_attrs)
+
+            #daMsg = "Would have created promotion action calculator of type: #{calculator_type}, "
+            #daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator_percentage}"
+            #Rails.logger.debug daMsg
+
+            Rail.logger.debug "Created promotion action calculator: #{promotion_action_calculator.pretty_inspect()}"
           end
         end
       end
