@@ -44,15 +44,12 @@ class Spree::PromotionBuilder
       @promotion.save
       Rails.logger.debug "creating #{@promotion_rules.length} promotion rules"
       @promotion_rules.each do |key, value|
-        Rails.logger.debug "Would have created promotion rule of type: #{value[:type]}"
         promotion_rule = @promotion.promotion_rules.create(value)
-        Rails.logger.debug "promotion_rule BEFORE save(): #{promotion_rule.pretty_inspect()}"
-        promotion_rule.save
-        Rails.logger.debug "promotion_rule BEFORE save(): #{promotion_rule.pretty_inspect()}"
-        # TODO: Create PromotionRuleUser, if PromotionRule of type 'Spree::Promotion::Rules::User'
+        Rails.logger.debug "Created promotion rule: #{promotion_rule.pretty_inspect()}"
+
         if value[:type] == "Spree::Promotion::Rules::User"
           promotion_rule_user_attr = { "promotion_rule_id" => promotion_rule.id, "user_id" => value[:user_id] }
-          promotion_rule.promotion_rule_user.create()
+          promotion_rule.promotion_rule_users.create(promotion_rule_user_attr)
         end
       end
     else
