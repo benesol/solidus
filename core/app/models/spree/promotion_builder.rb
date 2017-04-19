@@ -102,6 +102,8 @@ class Spree::PromotionBuilder
               "calculable_id" => promotion_action.id, "preferred_percent" => calculator_percentage }
 
             promotion_action_calculator = Spree::Calculator::PercentOnLineItem.new(calculator_attrs)
+            promotion_action.save
+            promotion_action_calculator.save
 
             #daMsg = "Would have created promotion action calculator of type: #{calculator_type}, "
             #daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator_percentage}"
