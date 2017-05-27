@@ -107,7 +107,7 @@ class Spree::PromotionBuilder
             #  "calculable_id" => promotion_action.id, "preferred_percent" => calculator_percentage }
 
             calculator_attrs = { "type" => calculator_type, "calculable_type" => calculable_type, \
-              "calculable_id" => promotion_action.id, "percent_per_item" => calculator_percentage }
+              "calculable_id" => promotion_action.id, "preferred_percent" => calculator_percentage }
 
             promotion_action_calculator = Spree::Calculator::PercentOnLineItem.new(calculator_attrs)
             promotion_action.save
@@ -117,6 +117,7 @@ class Spree::PromotionBuilder
             #daMsg << "calculable_type: #{calculable_type}, calculator_percentage: #{calculator_percentage}"
             #Rails.logger.debug daMsg
 
+            # TODO: Figure-out why not seeing this message in log file.
             Rails.logger.debug "Created promotion action calculator: #{promotion_action_calculator.pretty_inspect()}"
           end
         end
