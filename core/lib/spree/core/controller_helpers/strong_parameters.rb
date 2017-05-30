@@ -56,6 +56,10 @@ module Spree
             ship_address_attributes: permitted_address_attributes
           ]
         end
+
+        def permitted_promotion_attributes
+          permitted_attributes.promotion_attributes # Define this somewhere??  Already defined in api_helpers.rb
+        end
       end
     end
   end

@@ -19,6 +19,7 @@ module Spree
       :payment_attributes,
       :product_attributes,
       :product_properties_attributes,
+      :promotion_attributes,
       :property_attributes,
       :return_authorization_attributes,
       :shipment_attributes,
@@ -78,6 +79,19 @@ module Spree
       :option_values_hash, :weight, :height, :width, :depth,
       :shipping_category_id, :tax_category_id,
       :taxon_ids, :option_type_ids, :cost_currency, :cost_price]
+
+    @@promotion_attributes = [
+      :id, :name, :description, :expires_at, :starts_at, :type, :usage_limit,
+      :match_policy, :advertise, :path
+    ]
+
+    @@promotion_action_attributes = [
+      :action_type
+    ]
+
+    @@promotion_rule_attributes = [
+      :type, :product_id, :user_id
+    ]
 
     @@property_attributes = [:name, :presentation]
 
