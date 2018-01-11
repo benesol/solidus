@@ -16,11 +16,13 @@ module Spree
       non_number_characters = /[^0-9\-#{separator}]/
 
       # strip everything else first
-      number.gsub!(non_number_characters, '')
-      # then replace the locale-specific decimal separator with the standard separator if necessary
-      number.gsub!(separator, '.') unless separator == '.'
+      number = number.gsub(non_number_characters, '')
 
-      number.to_d
+      # then replace the locale-specific decimal separator with the standard separator if necessary
+      number = number.gsub(separator, '.') unless separator == '.'
+
+      # Handle empty string for ruby 2.4 compatibility
+      BigDecimal(number.presence || 0)
     end
   end
 end

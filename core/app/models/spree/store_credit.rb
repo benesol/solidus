@@ -1,4 +1,4 @@
-class Spree::StoreCredit < Spree::Base
+class Spree::StoreCredit < Spree::PaymentSource
   acts_as_paranoid
 
   VOID_ACTION       = 'void'
@@ -66,7 +66,6 @@ class Spree::StoreCredit < Spree::Base
       })
       authorization_code
     else
-      errors.add(:base, Spree.t('store_credit.insufficient_authorized_amount'))
       false
     end
   end
@@ -145,20 +144,8 @@ class Spree::StoreCredit < Spree::Base
     end
   end
 
-  def actions
-    [CAPTURE_ACTION, VOID_ACTION, CREDIT_ACTION]
-  end
-
-  def can_capture?(payment)
-    payment.pending? || payment.checkout?
-  end
-
   def can_void?(payment)
     payment.pending?
-  end
-
-  def can_credit?(payment)
-    payment.completed? && payment.credit_allowed > 0
   end
 
   def generate_authorization_code
@@ -239,7 +226,7 @@ class Spree::StoreCredit < Spree::Base
   end
 
   def store_event
-    return unless amount_changed? || amount_used_changed? || amount_authorized_changed? || [ELIGIBLE_ACTION, INVALIDATE_ACTION].include?(action)
+    return unless saved_change_to_amount? || saved_change_to_amount_used? || saved_change_to_amount_authorized? || [ELIGIBLE_ACTION, INVALIDATE_ACTION].include?(action)
 
     event = if action
       store_credit_events.build(action: action)
@@ -250,7 +237,7 @@ class Spree::StoreCredit < Spree::Base
     event.update_attributes!({
       amount: action_amount || amount,
       authorization_code: action_authorization_code || event.authorization_code || generate_authorization_code,
-      user_total_amount: user.total_available_store_credit,
+      user_total_amount: user.available_store_credit_total(currency: currency),
       originator: action_originator,
       update_reason: update_reason
     })
@@ -284,8 +271,13 @@ class Spree::StoreCredit < Spree::Base
 
   def associate_credit_type
     unless type_id
-      credit_type_name = category.try(:non_expiring?) ? Spree.t("store_credit.non_expiring") : Spree.t("store_credit.expiring")
-      self.credit_type = Spree::StoreCreditType.find_by_name(credit_type_name)
+      credit_type_name =
+        if category.try(:non_expiring?)
+          Spree::StoreCreditType::NON_EXPIRING
+        else
+          Spree::StoreCreditType::EXPIRING
+        end
+      self.credit_type = Spree::StoreCreditType.find_by(name: credit_type_name)
     end
   end
 end

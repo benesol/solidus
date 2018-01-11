@@ -18,13 +18,13 @@ module Spree
       end
 
       def new
-        @payment = @order.payments.build
+        @payment = @order.payments.build(amount: @order.outstanding_balance)
       end
 
       def create
         @payment = PaymentCreate.new(@order, object_params).build
         if @payment.payment_method.source_required? && params[:card].present? && params[:card] != 'new'
-          @payment.source = @payment.payment_method.payment_source_class.find_by_id(params[:card])
+          @payment.source = @payment.payment_method.payment_source_class.find_by(id: params[:card])
         end
 
         begin
@@ -78,7 +78,7 @@ module Spree
 
       def load_data
         @amount = params[:amount] || load_order.total
-        @payment_methods = PaymentMethod.available(:back_end)
+        @payment_methods = Spree::PaymentMethod.active.available_to_admin
         if @payment && @payment.payment_method
           @payment_method = @payment.payment_method
         else
@@ -87,13 +87,13 @@ module Spree
       end
 
       def load_order
-        @order = Order.find_by_number!(params[:order_id])
+        @order = Spree::Order.find_by!(number: params[:order_id])
         authorize! action, @order
         @order
       end
 
       def load_payment
-        @payment = Payment.find(params[:id])
+        @payment = Spree::Payment.find(params[:id])
       end
 
       def load_payment_for_fire

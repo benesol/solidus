@@ -17,18 +17,18 @@ module Spree
       end
     end
 
-    # overwrite to provide description for your calculators
+    # A description for this calculator in few words
+    # @return [String] A description for the calculator
     def self.description
-      'Base Calculator'
+      model_name.human
     end
 
     ###################################################################
 
-    def self.register(*_klasses)
-    end
-
     # Returns all calculators applicable for kind of work
     def self.calculators
+      Spree::Deprecation.warn("Calling .calculators is deprecated. Please access through Rails.application.config.spree.calculators")
+
       Rails.application.config.spree.calculators
     end
 

@@ -8,7 +8,7 @@ module Spree
                     includes(:country).order('name ASC')
 
         if params[:page] || params[:per_page]
-          @states = @states.page(params[:page]).per(params[:per_page])
+          @states = paginate(@states)
         end
 
         respond_with(@states)
@@ -23,10 +23,10 @@ module Spree
 
       def scope
         if params[:country_id]
-          @country = Country.accessible_by(current_ability, :read).find(params[:country_id])
+          @country = Spree::Country.accessible_by(current_ability, :read).find(params[:country_id])
           return @country.states.accessible_by(current_ability, :read)
         else
-          return State.accessible_by(current_ability, :read)
+          return Spree::State.accessible_by(current_ability, :read)
         end
       end
     end

@@ -5,6 +5,8 @@ describe 'Users', type: :feature do
   let!(:country) { create(:country) }
   let!(:user_a) { create(:user_with_addresses, email: 'a@example.com') }
   let!(:user_b) { create(:user_with_addresses, email: 'b@example.com') }
+  let!(:admin_role) { create(:role, name: 'admin') }
+  let!(:user_role) { create(:role, name: 'user') }
 
   let(:order) { create(:completed_order_with_totals, user: user_a, number: "R123") }
 
@@ -62,7 +64,8 @@ describe 'Users', type: :feature do
 
     it "can sort desc" do
       within_table(table_id) do
-        click_link sort_link
+        # Ransack adds a ▲ to the sort link. With exact match Capybara is not able to find that link
+        click_link sort_link, exact: false
 
         expect(page).to have_text text_match_1
         expect(page).to have_text text_match_2
@@ -86,12 +89,47 @@ describe 'Users', type: :feature do
       end
     end
 
-    it 'displays the correct results for a user search' do
+    it 'displays the correct results for a user search by email' do
       fill_in 'q_email_cont', with: user_a.email
       click_button 'Search'
       within_table('listing_users') do
         expect(page).to have_text user_a.email
         expect(page).not_to have_text user_b.email
+      end
+    end
+
+    context "member since" do
+      it_behaves_like "a sortable attribute" do
+        let(:text_match_1) { user_a.email }
+        let(:text_match_2) { user_b.email }
+        let(:table_id) { "listing_users" }
+        let(:sort_link) { Spree.t(:member_since) }
+      end
+
+      it 'displays the correct results for a user search by creation date' do
+        user_a.update_column(:created_at, 2.weeks.ago)
+        fill_in 'q_created_at_lt', with: 1.week.ago
+        click_button 'Search'
+        within_table('listing_users') do
+          expect(page).to have_text user_a.email
+          expect(page).not_to have_text user_b.email
+        end
+      end
+    end
+
+    context 'with users having roles' do
+      before do
+        user_a.spree_roles << admin_role
+        user_b.spree_roles << user_role
+      end
+
+      it 'displays the correct results for a user search by role' do
+        select 'admin', from: Spree.user_class.human_attribute_name(:spree_roles)
+        click_button 'Search'
+        within_table('listing_users') do
+          expect(page).to have_text user_a.email
+          expect(page).not_to have_text user_b.email
+        end
       end
     end
   end
@@ -119,13 +157,26 @@ describe 'Users', type: :feature do
     end
 
     it 'can edit user roles' do
-      Spree::Role.create name: "admin"
       click_link 'Account'
 
       check 'user_spree_role_admin'
       click_button 'Update'
       expect(page).to have_text 'Account updated'
       expect(find_field('user_spree_role_admin')).to be_checked
+    end
+
+    it 'can delete user roles' do
+      user_a.spree_roles << Spree::Role.create(name: "dummy")
+      click_link 'Account'
+
+      user_a.spree_roles.each do |role|
+        uncheck "user_spree_role_#{role.name}"
+      end
+
+      click_button 'Update'
+      expect(page).to have_text 'Account updated'
+      expect(find_field('user_spree_role_dummy')).not_to be_checked
+      expect(user_a.reload.spree_roles).to be_empty
     end
 
     it 'can edit user shipping address' do
@@ -173,7 +224,13 @@ describe 'Users', type: :feature do
         fill_in 'user_email', with: 'something'
         click_button 'Update'
 
-        expect(page).to have_content("Email is invalid")
+        within('#errorExplanation') do
+          expect(page).to have_content("Email is invalid")
+        end
+
+        within('.flash.error') do
+          expect(page).to have_content("Email is invalid")
+        end
       end
     end
 
@@ -240,7 +297,7 @@ describe 'Users', type: :feature do
       end
     end
 
-    [:number, :state, :total].each do |attr|
+    [:number, :total].each do |attr|
       context attr do
         it_behaves_like "a sortable attribute" do
           let(:text_match_1) { order.send(attr).to_s }
@@ -249,6 +306,13 @@ describe 'Users', type: :feature do
           let(:sort_link) { "orders_#{attr}_title" }
         end
       end
+    end
+
+    context "state" do
+      let(:text_match_1) { "Complete" }
+      let(:text_match_2) { "Complete" }
+      let(:table_id) { "listing_orders" }
+      let(:sort_link) { "orders_#{attr}_title" }
     end
   end
 
@@ -270,15 +334,18 @@ describe 'Users', type: :feature do
       end
     end
 
-    [:number, :state].each do |attr|
-      context attr do
-        it_behaves_like "a sortable attribute" do
-          let(:text_match_1) { order.send(attr).to_s }
-          let(:text_match_2) { order_2.send(attr).to_s }
-          let(:table_id) { "listing_items" }
-          let(:sort_link) { "orders_#{attr}_title" }
-        end
-      end
+    context "number" do
+      let(:text_match_1) { "R123" }
+      let(:text_match_2) { "R456" }
+      let(:table_id) { "listing_items" }
+      let(:sort_link) { "orders_#{attr}_title" }
+    end
+
+    context "state" do
+      let(:text_match_1) { "Complete" }
+      let(:text_match_2) { "Complete" }
+      let(:table_id) { "listing_items" }
+      let(:sort_link) { "orders_#{attr}_title" }
     end
 
     it "has item attributes" do

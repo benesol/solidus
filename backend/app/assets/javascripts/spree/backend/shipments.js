@@ -47,7 +47,7 @@ var ShipShipmentView = Backbone.View.extend({
       type: "PUT",
       url: Spree.routes.shipments_api + "/" + this.shipment_number + "/ship",
       data: {
-        send_mailer: this.$("[name='send_mailer']").val()
+        send_mailer: this.$("[name='send_mailer']").is(":checked")
       },
       success: function(){
         window.location.reload()
@@ -188,9 +188,13 @@ var ShipmentSplitItemView = Backbone.View.extend({
       return false;
     }
     jqXHR.error(function(msg) {
-      alert(msg.responseJSON['message']);
-    }).done(function() {
-      window.Spree.advanceOrder();
+      alert(Spree.t("split_failed"));
+    }).done(function(response) {
+      if (response.success) {
+        window.Spree.advanceOrder();
+      } else {
+        alert(response.message);
+      };
     });
   },
 
@@ -224,8 +228,8 @@ var ShipmentItemView = Backbone.View.extend({
   },
 
   events: {
-    "click .delete-item": "onDelete",
-    "click .split-item": "onSplit",
+    "click button.delete-item": "onDelete",
+    "click button.split-item": "onSplit",
   },
 
   removeSplit: function() {
@@ -286,13 +290,13 @@ var ShipmentEditView = Backbone.View.extend({
   },
 
   events: {
-    "click a.edit-method": "toggleMethodEdit",
-    "click a.cancel-method": "toggleMethodEdit",
-    "click a.save-method": "saveMethod",
+    "click button.edit-method": "toggleMethodEdit",
+    "click button.cancel-method": "toggleMethodEdit",
+    "click button.save-method": "saveMethod",
 
-    "click a.edit-tracking": "toggleTrackingEdit",
-    "click a.cancel-tracking": "toggleTrackingEdit",
-    "click a.save-tracking": "saveTracking",
+    "click button.edit-tracking": "toggleTrackingEdit",
+    "click button.cancel-tracking": "toggleTrackingEdit",
+    "click button.save-tracking": "saveTracking",
   },
 
   toggleMethodEdit: function(e){
@@ -328,10 +332,8 @@ var ShipmentEditView = Backbone.View.extend({
 
       var show = _this.$('tr.show-tracking');
       show.toggle()
-          .find('.tracking-value')
-          .html($("<strong>")
-          .html(Spree.translations.tracking + ": "))
-          .append(document.createTextNode(data.tracking));
+        .find('.tracking-value')
+        .text(data.tracking);
     });
   }
 });

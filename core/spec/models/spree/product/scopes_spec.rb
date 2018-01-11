@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe "Product scopes", type: :model do
+RSpec.describe "Product scopes", type: :model do
   let!(:product) { create(:product) }
 
   context "A product assigned to parent and child taxons" do
@@ -110,6 +110,52 @@ describe "Product scopes", type: :model do
 
       it "cannot find with an invalid value" do
         expect(with_property_value.call(property.id, "fake").count).to eq(0)
+      end
+    end
+  end
+
+  describe '.available' do
+    context "a product with past available_on" do
+      let!(:product) { create(:product, available_on: 1.day.ago) }
+
+      it "includes the product" do
+        expect(Spree::Product.available).to match_array([product])
+      end
+
+      context "with no master price" do
+        before { product.master.prices.delete_all }
+
+        it "doesn't include the product" do
+          expect(Spree::Product.available).to match_array([])
+        end
+      end
+
+      context "with soft-deleted master price" do
+        before { product.master.prices.destroy_all }
+
+        it "doesn't include the product" do
+          expect(Spree::Product.available).to match_array([])
+        end
+      end
+
+      context "with multiple prices" do
+        let!(:second_price) { create(:price, variant: product.master) }
+
+        it "includes the product only once" do
+          expect(Spree::Product.available).to match_array([product])
+        end
+
+        it "has a count of 1" do
+          expect(Spree::Product.available.count).to eq(1)
+        end
+      end
+    end
+
+    context "a product with future available_on" do
+      let!(:product) { create(:product, available_on: 1.day.from_now) }
+
+      it "doesn't include the product" do
+        expect(Spree::Product.available).to match_array([])
       end
     end
   end

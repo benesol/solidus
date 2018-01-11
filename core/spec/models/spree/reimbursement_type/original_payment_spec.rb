@@ -1,7 +1,7 @@
-require 'spec_helper'
+require 'rails_helper'
 
 module Spree
-  describe ReimbursementType::OriginalPayment, type: :model do
+  RSpec.describe ReimbursementType::OriginalPayment, type: :model do
     let(:reimbursement)           { create(:reimbursement, return_items_count: 1) }
     let(:return_item)             { reimbursement.return_items.first }
     let(:payment)                 { reimbursement.order.payments.first }
@@ -54,7 +54,7 @@ module Spree
       context "multiple payment methods" do
         let(:simulate) { true }
         let!(:check_payment) { create(:check_payment, order: reimbursement.order, amount: 5.0, state: "completed") }
-        let(:payment) { reimbursement.order.payments.detect { |p| p.payment_method.is_a? Spree::Gateway::Bogus } }
+        let(:payment) { reimbursement.order.payments.detect { |p| p.payment_method.is_a? Spree::PaymentMethod::BogusCreditCard } }
         let(:refund_amount) { 10.0 }
 
         let(:refund_payment_methods) { subject.map { |refund| refund.payment.payment_method } }

@@ -21,9 +21,9 @@ describe "Cancelling + Resuming", type: :feature do
 
   it "can cancel an order" do
     visit spree.edit_admin_order_path(order.number)
-    click_button 'cancel'
+    click_button 'Cancel'
     within(".additional-info") do
-      expect(find('dt#order_status + dd')).to have_content("canceled")
+      expect(find('dt#order_status + dd')).to have_content("Canceled")
     end
   end
 
@@ -34,9 +34,9 @@ describe "Cancelling + Resuming", type: :feature do
 
     it "can resume an order" do
       visit spree.edit_admin_order_path(order.number)
-      click_button 'resume'
+      click_button 'Resume'
       within(".additional-info") do
-        expect(find('dt#order_status + dd')).to have_content("resumed")
+        expect(find('dt#order_status + dd')).to have_content("Resumed")
       end
     end
   end

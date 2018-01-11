@@ -1,11 +1,15 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Store, type: :model do
+RSpec.describe Spree::Store, type: :model do
   it { is_expected.to respond_to(:cart_tax_country_iso) }
 
-  describe ".by_url" do
+  describe ".by_url (deprecated)" do
     let!(:store)    { create(:store, url: "website1.com\nwww.subdomain.com") }
     let!(:store_2)  { create(:store, url: 'freethewhales.com') }
+
+    around do |example|
+      Spree::Deprecation.silence { example.run }
+    end
 
     it "should find stores by url" do
       by_domain = Spree::Store.by_url('www.subdomain.com')
@@ -15,7 +19,7 @@ describe Spree::Store, type: :model do
     end
   end
 
-  describe '.current' do
+  describe '.current (deprecated)' do
     let!(:store_1) { create(:store) }
     let!(:store_default) { create(:store, name: 'default', default: true) }
     let!(:store_2) { create(:store, default: false, url: 'www.subdomain.com') }
@@ -23,12 +27,8 @@ describe Spree::Store, type: :model do
 
     delegate :current, to: :described_class
 
-    context "with no argument" do
-      it 'should return default' do
-        Spree::Deprecation.silence do
-          expect(current).to eql(store_default)
-        end
-      end
+    around do |example|
+      Spree::Deprecation.silence { example.run }
     end
 
     context "with no match" do

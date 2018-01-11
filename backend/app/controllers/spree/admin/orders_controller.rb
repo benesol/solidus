@@ -1,6 +1,8 @@
 module Spree
   module Admin
     class OrdersController < Spree::Admin::BaseController
+      helper 'spree/admin/payments'
+
       before_action :initialize_order_events
       before_action :load_order, only: [:edit, :update, :complete, :advance, :cancel, :resume, :approve, :resend, :unfinalize_adjustments, :finalize_adjustments, :cart, :confirm]
       around_action :lock_order, only: [:update, :advance, :complete, :confirm, :cancel, :resume, :approve, :resend]
@@ -46,7 +48,7 @@ module Spree
           params[:q][:completed_at_lt] = params[:q].delete(:created_at_lt)
         end
 
-        @search = Order.accessible_by(current_ability, :index).ransack(params[:q])
+        @search = Spree::Order.accessible_by(current_ability, :index).ransack(params[:q])
 
         # lazy loading other models here (via includes) may result in an invalid query
         # e.g. SELECT  DISTINCT DISTINCT "spree_orders".id, "spree_orders"."created_at" AS alias_0 FROM "spree_orders"
@@ -67,23 +69,16 @@ module Spree
       end
 
       def new
-        user = Spree.user_class.find_by_id(params[:user_id]) if params[:user_id]
+        user = Spree.user_class.find_by(id: params[:user_id]) if params[:user_id]
         @order = Spree::Core::Importer::Order.import(user, order_params)
         redirect_to cart_admin_order_url(@order)
       end
 
       def edit
         require_ship_address
-
-        unless @order.completed?
-          @order.refresh_shipment_rates
-        end
       end
 
       def cart
-        unless @order.completed?
-          @order.refresh_shipment_rates
-        end
         if @order.shipped_shipments.count > 0
           redirect_to edit_admin_order_url(@order)
         end
@@ -96,7 +91,7 @@ module Spree
         else
           @order.contents.advance
 
-          if @order.confirm?
+          if @order.can_complete?
             flash[:success] = Spree.t('order_ready_for_confirm')
           else
             flash[:error] = @order.errors.full_messages
@@ -109,7 +104,7 @@ module Spree
       def confirm
         if @order.completed?
           redirect_to edit_admin_order_url(@order)
-        elsif !@order.confirm?
+        elsif !@order.can_complete?
           render template: 'spree/admin/orders/confirm_advance'
         end
       end
@@ -127,26 +122,26 @@ module Spree
       def cancel
         @order.canceled_by(try_spree_current_user)
         flash[:success] = Spree.t(:order_canceled)
-        redirect_to :back
+        redirect_to(spree.edit_admin_order_path(@order))
       end
 
       def resume
         @order.resume!
         flash[:success] = Spree.t(:order_resumed)
-        redirect_to :back
+        redirect_to(spree.edit_admin_order_path(@order))
       end
 
       def approve
         @order.contents.approve(user: try_spree_current_user)
         flash[:success] = Spree.t(:order_approved)
-        redirect_to :back
+        redirect_to(spree.edit_admin_order_path(@order))
       end
 
       def resend
-        OrderMailer.confirm_email(@order.id, true).deliver_later
+        OrderMailer.confirm_email(@order, true).deliver_later
         flash[:success] = Spree.t(:order_email_resent)
 
-        redirect_to :back
+        redirect_to(spree.edit_admin_order_path(@order))
       end
 
       def unfinalize_adjustments
@@ -154,7 +149,7 @@ module Spree
         adjustments.each(&:unfinalize!)
         flash[:success] = Spree.t(:all_adjustments_unfinalized)
 
-        respond_with(@order) { |format| format.html { redirect_to :back } }
+        respond_with(@order) { |format| format.html { redirect_to(spree.admin_order_adjustments_path(@order)) } }
       end
 
       def finalize_adjustments
@@ -162,7 +157,7 @@ module Spree
         adjustments.each(&:finalize!)
         flash[:success] = Spree.t(:all_adjustments_finalized)
 
-        respond_with(@order) { |format| format.html { redirect_to :back } }
+        respond_with(@order) { |format| format.html { redirect_to(spree.admin_order_adjustments_path(@order)) } }
       end
 
       private
@@ -176,7 +171,7 @@ module Spree
       end
 
       def load_order
-        @order = Order.includes(:adjustments).find_by_number!(params[:id])
+        @order = Spree::Order.includes(:adjustments).find_by!(number: params[:id])
         authorize! action, @order
       end
 

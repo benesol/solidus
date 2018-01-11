@@ -1,7 +1,7 @@
-require 'spec_helper'
+require 'rails_helper'
 require 'spree/testing_support/order_walkthrough'
 
-describe Spree::Order, type: :model do
+RSpec.describe Spree::Order, type: :model do
   let!(:store) { create(:store) }
   let(:order) { Spree::Order.new(store: store) }
 
@@ -147,7 +147,8 @@ describe Spree::Order, type: :model do
           it_behaves_like "it references the user's the default address" do
             let(:address_kind) { :bill }
             before do
-              order.user = FactoryGirl.create(:user, bill_address: default_address)
+              order.user = FactoryGirl.create(:user)
+              order.user.default_address = default_address
               order.next!
               order.reload
             end
@@ -162,12 +163,14 @@ describe Spree::Order, type: :model do
     end
 
     context "from address" do
-      let(:ship_address) { FactoryGirl.create(:ship_address) }
+      let(:ship_address) { create(:ship_address) }
+      let!(:line_item) { create(:line_item, order: order, price: 10) }
+      let!(:shipping_method) { create(:shipping_method) }
 
       before do
+        order.line_items.reload
         order.state = 'address'
         order.ship_address = ship_address
-        FactoryGirl.create(:shipment, order: order, cost: 10)
         order.email = "user@example.com"
         order.save!
       end
@@ -180,31 +183,25 @@ describe Spree::Order, type: :model do
         end
       end
 
-      it "updates totals" do
-        line_item = FactoryGirl.create(:line_item, price: 10, adjustment_total: 10)
-        order.line_items << line_item
-        tax_rate = create(:tax_rate, tax_category: line_item.tax_category, amount: 0.05)
-        allow(Spree::TaxRate).to receive_messages match: [tax_rate]
-        FactoryGirl.create(:tax_adjustment, adjustable: line_item, source: tax_rate, order: order)
-        order.email = "user@example.com"
+      it "recalculates tax and updates totals" do
+        zone = create(:zone, countries: [order.tax_address.country])
+        create(:tax_rate, tax_categories: [line_item.tax_category], amount: 0.05, zone: zone)
         order.next!
-        expect(order.adjustment_total).to eq(0.5)
-        expect(order.additional_tax_total).to eq(0.5)
-        expect(order.included_tax_total).to eq(0)
-        expect(order.total).to eq(20.5)
+        expect(order).to have_attributes(
+          adjustment_total: 0.5,
+          additional_tax_total: 0.5,
+          included_tax_total: 0,
+          total: 20.5
+        )
       end
 
       it "transitions to delivery" do
-        allow(order).to receive_messages(ensure_available_shipping_rates: true)
         order.next!
         assert_state_changed(order, 'address', 'delivery')
         expect(order.state).to eq("delivery")
       end
 
       it "does not call persist_order_address if there is no address on the order" do
-        # otherwise, it will crash
-        allow(order).to receive_messages(ensure_available_shipping_rates: true)
-
         order.user = FactoryGirl.create(:user)
         order.save!
 
@@ -213,8 +210,6 @@ describe Spree::Order, type: :model do
       end
 
       it "calls persist_order_address on the order's user" do
-        allow(order).to receive_messages(ensure_available_shipping_rates: true)
-
         order.user = FactoryGirl.create(:user)
         order.ship_address = FactoryGirl.create(:address)
         order.bill_address = FactoryGirl.create(:address)
@@ -225,8 +220,6 @@ describe Spree::Order, type: :model do
       end
 
       it "does not call persist_order_address on the order's user for a temporary address" do
-        allow(order).to receive_messages(ensure_available_shipping_rates: true)
-
         order.user = FactoryGirl.create(:user)
         order.temporary_address = true
         order.save!
@@ -262,11 +255,6 @@ describe Spree::Order, type: :model do
           allow(order).to receive(:ensure_available_shipping_rates) { true }
         end
 
-        it 'should invoke set_shipment_cost' do
-          expect(order).to receive(:set_shipments_cost)
-          order.next!
-        end
-
         it 'should update shipment_total' do
           expect { order.next! }.to change{ order.shipment_total }.by(10.00)
         end
@@ -293,12 +281,12 @@ describe Spree::Order, type: :model do
       before do
         order.ship_address = ship_address
         order.state = 'delivery'
-        allow(order).to receive(:apply_free_shipping_promotions)
+        allow(order).to receive(:apply_shipping_promotions)
         allow(order).to receive(:ensure_available_shipping_rates) { true }
       end
 
       it "attempts to apply free shipping promotions" do
-        expect(order).to receive(:apply_free_shipping_promotions)
+        expect(order).to receive(:apply_shipping_promotions)
         order.next!
       end
 
@@ -308,7 +296,6 @@ describe Spree::Order, type: :model do
         end
 
         it "transitions to payment" do
-          expect(order).to receive(:set_shipments_cost)
           order.next!
           assert_state_changed(order, 'delivery', 'payment')
           expect(order.state).to eq('payment')
@@ -341,7 +328,7 @@ describe Spree::Order, type: :model do
         context "with a shipment that has a price" do
           before do
             shipment.shipping_rates.first.update_column(:cost, 10)
-            order.set_shipments_cost
+            order.recalculate
           end
 
           it "transitions to payment" do
@@ -353,7 +340,6 @@ describe Spree::Order, type: :model do
         context "with a shipment that is free" do
           before do
             shipment.shipping_rates.first.update_column(:cost, 0)
-            order.set_shipments_cost
           end
 
           it "skips payment, transitions to confirm" do
@@ -370,8 +356,9 @@ describe Spree::Order, type: :model do
       let(:default_credit_card) { create(:credit_card) }
 
       before do
-        user = Spree::LegacyUser.new(email: 'spree@example.org', bill_address: user_bill_address)
-        allow(user).to receive(:default_credit_card) { default_credit_card }
+        user = create(:user, email: 'spree@example.org', bill_address: user_bill_address)
+        wallet_payment_source = user.wallet.add(default_credit_card)
+        user.wallet.default_wallet_payment_source = wallet_payment_source
         order.user = user
 
         allow(order).to receive_messages(payment_required?: true)
@@ -541,24 +528,9 @@ describe Spree::Order, type: :model do
           order.save!
         end
 
-        context 'when the exchange is for an unreturned item' do
-          before do
-            order.shipments.first.update_attributes!(created_at: order.created_at - 1.day)
-            expect(order.unreturned_exchange?).to eq true
-          end
-
-          it 'allows the order to complete' do
-            order.complete!
-
-            expect(order).to be_complete
-          end
-        end
-
-        context 'when the exchange is not for an unreturned item' do
-          it 'does not allow the order to completed' do
-            expect { order.complete! }.to raise_error Spree::Order::InsufficientStock
-            expect(order.payments.first.state).to eq('checkout')
-          end
+        it 'does not allow the order to completed' do
+          expect { order.complete! }.to raise_error Spree::Order::InsufficientStock
+          expect(order.payments.first.state).to eq('checkout')
         end
       end
     end
@@ -584,13 +556,13 @@ describe Spree::Order, type: :model do
       it "makes the current credit card a user's default credit card" do
         order.complete!
         expect(order.state).to eq 'complete'
-        expect(order.user.reload.default_credit_card.try(:id)).to eq(order.credit_cards.first.id)
+        expect(order.user.reload.wallet.default_wallet_payment_source.payment_source).to eq(order.credit_cards.first)
       end
 
-      it "does not assign a default credit card if temporary_credit_card is set" do
-        order.temporary_credit_card = true
+      it "does not assign a default credit card if temporary_payment_source is set" do
+        order.temporary_payment_source = true
         order.complete!
-        expect(order.user.reload.default_credit_card).to be_nil
+        expect(order.user.reload.wallet.default_wallet_payment_source).to be_nil
       end
     end
 
@@ -618,28 +590,12 @@ describe Spree::Order, type: :model do
       end
     end
 
-    context 'a shipment has no shipping rates' do
-      let(:order) { create(:order_with_line_items, state: 'confirm') }
-      let(:shipment) { order.shipments.first }
-
-      before do
-        shipment.shipping_rates.destroy_all
-      end
-
-      it 'clears the shipments and fails the transition' do
-        expect(order.complete).to eq(false)
-        expect(order.errors[:base]).to include(Spree.t(:items_cannot_be_shipped))
-        expect(order.shipments.count).to eq(0)
-        expect(Spree::InventoryUnit.where(shipment_id: shipment.id).count).to eq(0)
-      end
-    end
-
     context 'the order is already paid' do
       let(:order) { create(:order_with_line_items) }
 
       it 'can complete the order' do
         create(:payment, state: 'completed', order: order, amount: order.total)
-        order.update!
+        order.recalculate
         expect(order.complete).to eq(true)
       end
     end
@@ -781,112 +737,6 @@ describe Spree::Order, type: :model do
     specify do
       order = Spree::Order.new
       expect(order.checkout_steps).to eq(%w(delivery confirm complete))
-    end
-  end
-
-  describe 'update_from_params' do
-    let(:order) { create(:order) }
-    let(:permitted_params) { {} }
-    let(:params) { {} }
-
-    around do |example|
-      Spree::Deprecation.silence { example.run }
-    end
-
-    it 'calls update_atributes without order params' do
-      expect {
-        order.update_from_params( params, permitted_params)
-      }.not_to change{ order.attributes }
-    end
-
-    it 'runs the callbacks' do
-      expect(order).to receive(:run_callbacks).with(:updating_from_params)
-      order.update_from_params( params, permitted_params)
-    end
-
-    context "passing a credit card" do
-      let(:permitted_params) do
-        Spree::PermittedAttributes.checkout_attributes +
-          [payments_attributes: Spree::PermittedAttributes.payment_attributes]
-      end
-
-      let(:credit_card) { create(:credit_card, user_id: order.user_id) }
-
-      let(:params) do
-        ActionController::Parameters.new(
-          order: {
-            payments_attributes: [
-              {
-                payment_method_id: 1,
-                source_attributes: attributes_for(:credit_card)
-              }
-            ],
-            existing_card: credit_card.id
-          },
-          cvc_confirm: "737"
-        )
-      end
-
-      before { order.user_id = 3 }
-
-      it "sets confirmation value when its available via :cvc_confirm" do
-        allow(Spree::CreditCard).to receive_messages find: credit_card
-        expect(credit_card).to receive(:verification_value=)
-        order.update_from_params(params, permitted_params)
-      end
-
-      it "sets existing card as source for new payment" do
-        expect {
-          order.update_from_params(params, permitted_params)
-        }.to change { Spree::Payment.count }.by(1)
-
-        expect(Spree::Payment.last.source).to eq credit_card
-      end
-
-      it "sets request_env on payment" do
-        request_env = { "USER_AGENT" => "Firefox" }
-
-        order.update_from_params(params, permitted_params, request_env)
-        expect(order.payments[0].request_env).to eq request_env
-      end
-
-      it "dont let users mess with others users cards" do
-        credit_card.update_column :user_id, 5
-
-        expect {
-          order.update_from_params(params, permitted_params)
-        }.to raise_error Spree::Core::GatewayError
-      end
-    end
-
-    context 'has params' do
-      let(:permitted_params) { [:good_param] }
-      let(:params) { ActionController::Parameters.new(order: { bad_param: 'okay' } ) }
-
-      it 'does not let through unpermitted attributes' do
-        expect(order).to receive(:assign_attributes).with({})
-        order.update_from_params(params, permitted_params)
-      end
-
-      context 'has allowed params' do
-        let(:params) { ActionController::Parameters.new(order: { good_param: 'okay' } ) }
-
-        it 'accepts permitted attributes' do
-          expect(order).to receive(:assign_attributes).with({ "good_param" => 'okay' })
-          order.update_from_params(params, permitted_params)
-        end
-      end
-
-      context 'callbacks halt' do
-        before do
-          expect(order).to receive(:update_params_payment_source).and_return false
-        end
-        it 'does not let through unpermitted attributes' do
-          expect(order).not_to receive(:assign_attributes)
-          expect(order).not_to receive(:save)
-          order.update_from_params(params, permitted_params)
-        end
-      end
     end
   end
 end

@@ -54,9 +54,14 @@
     position: relative;
     padding-bottom: 10px;
 
+    > .row {
+      margin-left: 10px;
+    }
+
     .remove {
       position: absolute;
-      left: -15px;
+      cursor: pointer;
+      left: 0;
       top: 10px;
 
       &:hover {
@@ -69,9 +74,11 @@
     text-align: right;
   }
 
-  .field {
+  .calculator-fields {
     padding-bottom: 10px;
+  }
 
+  .field {
     &.alpha {
       margin-left: -1px;
       padding-left: 11px;
@@ -116,7 +123,7 @@
     cursor: pointer;
 
     &:hover {
-      color: $color-error;
+      color: theme-color("danger");
     }
   }
 }

@@ -19,7 +19,7 @@ module Spree
 
         content_tag :ol, class: 'breadcrumb' do
           safe_join admin_breadcrumbs.map { |level|
-            content_tag(:li, level, class: "separator #{level == admin_breadcrumbs.last ? 'active' : ''}")
+            content_tag(:li, level, class: "breadcrumb-item #{level == admin_breadcrumbs.last ? 'active' : ''}")
           }
         end
       end
@@ -30,7 +30,7 @@ module Spree
         elsif content_for?(:page_title)
           content_for(:page_title)
         elsif admin_breadcrumbs.any?
-          strip_tags(admin_breadcrumbs.last)
+          admin_breadcrumbs.map{ |x| strip_tags(x) }.reverse.join(' - ')
         else
           Spree.t(controller.controller_name, default: controller.controller_name.titleize)
         end
@@ -79,6 +79,7 @@ module Spree
 
       def link_to_clone(resource, options = {})
         options[:data] = { action: 'clone' }
+        options[:method] = :post
         link_to_with_icon('copy', Spree.t(:clone), clone_object_url(resource), options)
       end
 
@@ -102,7 +103,7 @@ module Spree
         url = options[:url] || object_url(resource)
         name = options[:name] || Spree.t('actions.delete')
         confirm = options[:confirm] || Spree.t(:are_you_sure)
-        options[:class] = "delete-resource"
+        options[:class] = "#{options[:class]} delete-resource".strip
         options[:data] = { confirm: confirm, action: 'remove' }
         link_to_with_icon 'trash', name, url, options
       end
@@ -116,9 +117,12 @@ module Spree
         link_to(text, url, options)
       end
 
-      def icon(icon_name)
+      def solidus_icon(icon_name)
         icon_name ? content_tag(:i, '', class: icon_name) : ''
       end
+
+      alias_method :icon, :solidus_icon
+      deprecate icon: :solidus_icon, deprecator: Spree::Deprecation
 
       def button(text, icon_name = nil, button_type = 'submit', options = {})
         class_names = "button"

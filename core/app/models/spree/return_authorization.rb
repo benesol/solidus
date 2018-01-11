@@ -1,4 +1,6 @@
 module Spree
+  # Models the return of Inventory Units to a Stock Location for an Order.
+  #
   class ReturnAuthorization < Spree::Base
     belongs_to :order, class_name: 'Spree::Order', inverse_of: :return_authorizations
 
@@ -11,19 +13,12 @@ module Spree
 
     before_create :generate_number
 
-    after_save :generate_expedited_exchange_reimbursements
-
     accepts_nested_attributes_for :return_items, allow_destroy: true
 
     validates :order, presence: true
     validates :stock_location, presence: true
     validate :must_have_shipped_units, on: :create
     validate :no_previously_exchanged_inventory_units, on: :create
-
-    # These are called prior to generating expedited exchanges shipments.
-    # Should respond to a "call" method that takes the list of return items
-    class_attribute :pre_expedited_exchange_hooks
-    self.pre_expedited_exchange_hooks = []
 
     state_machine initial: :authorized do
       before_transition to: :canceled, do: :cancel_return_items
@@ -34,16 +29,19 @@ module Spree
     end
 
     extend DisplayMoney
-    money_methods :pre_tax_total, :amount
+    money_methods :pre_tax_total, :amount, :total_excluding_vat
+    deprecate display_pre_tax_total: :display_total_excluding_vat, deprecator: Spree::Deprecation
 
     self.whitelisted_ransackable_attributes = ['memo']
 
-    def pre_tax_total
-      return_items.map(&:pre_tax_amount).sum
+    def total_excluding_vat
+      return_items.map(&:total_excluding_vat).sum
     end
+    alias pre_tax_total total_excluding_vat
+    deprecate pre_tax_total: :total_excluding_vat, deprecator: Spree::Deprecation
 
     def amount
-      return_item.sum(:amount)
+      return_items.sum(:amount)
     end
 
     def currency
@@ -51,7 +49,7 @@ module Spree
     end
 
     def refundable_amount
-      order.discounted_item_amount + order.promo_total
+      order.item_total_before_tax + order.promo_total
     end
 
     def customer_returned_items?
@@ -85,27 +83,6 @@ module Spree
 
     def cancel_return_items
       return_items.each { |item| item.cancel! if item.can_cancel? }
-    end
-
-    def generate_expedited_exchange_reimbursements
-      return unless Spree::Config[:expedited_exchanges]
-
-      items_to_exchange = return_items.select(&:exchange_required?)
-      items_to_exchange.each(&:attempt_accept)
-      items_to_exchange.select!(&:accepted?)
-
-      return if items_to_exchange.blank?
-
-      pre_expedited_exchange_hooks.each { |h| h.call items_to_exchange }
-
-      reimbursement = Reimbursement.new(return_items: items_to_exchange, order: order)
-
-      if reimbursement.save
-        reimbursement.perform!
-      else
-        errors.add(:base, reimbursement.errors.full_messages)
-        raise ActiveRecord::RecordInvalid.new(self)
-      end
     end
   end
 end

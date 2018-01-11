@@ -1,4 +1,4 @@
-$('#rules').append('<%= escape_javascript( render(:partial => 'spree/admin/promotions/promotion_rule', :object => @promotion_rule) ) %>');
+$('#rules').append('<%= escape_javascript( render(partial: 'spree/admin/promotions/promotion_rule', object: @promotion_rule) ) %>');
 $('#rules .no-objects-found').hide();
 
 $('.product_picker').productAutocomplete();
@@ -6,5 +6,3 @@ $('.user_picker').userAutocomplete();
 $('.taxon_picker').taxonAutocomplete();
 
 $('#promotion_rule_type').html('<%= escape_javascript options_for_promotion_rule_types(@promotion) %>');
-$('#promotion_rule_type').select2();
-

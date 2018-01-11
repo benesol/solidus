@@ -2,36 +2,28 @@ module Spree
   module Admin
     class PromotionsController < ResourceController
       before_action :load_data
-      before_action :load_bulk_code_information, only: [:edit]
-
-      create.before :build_promotion_codes
 
       helper 'spree/promotion_rules'
 
       def create
-        @promotion_builder = Spree::PromotionBuilder.new(
-          permitted_promo_builder_params.merge(user: try_spree_current_user),
-          permitted_resource_params
-        )
-        @promotion = @promotion_builder.promotion
+        @promotion = Spree::Promotion.new(permitted_resource_params)
+        @promotion.codes.new(value: params[:single_code]) if params[:single_code].present?
 
-        if @promotion_builder.perform
+        if params[:promotion_code_batch]
+          @promotion_code_batch = @promotion.promotion_code_batches.new(promotion_code_batch_params)
+        end
+
+        if @promotion.save
+          @promotion_code_batch.process if @promotion_code_batch
           flash[:success] = Spree.t(:promotion_successfully_created)
           redirect_to location_after_save
         else
-          flash[:error] = @promotion_builder.errors.full_messages.join(", ")
+          flash[:error] = @promotion.errors.full_messages.join(", ")
           render action: 'new'
         end
       end
 
       private
-
-      def load_bulk_code_information
-        @promotion_builder = Spree::PromotionBuilder.new(
-          base_code: @promotion.codes.first.try!(:value),
-          number_of_codes: @promotion.codes.count
-        )
-      end
 
       def location_after_save
         spree.edit_admin_promotion_url(@promotion)
@@ -43,7 +35,7 @@ module Spree
       end
 
       def collection
-        return @collection if defined?(@collection)
+        return @collection if @collection
         params[:q] ||= HashWithIndifferentAccess.new
         params[:q][:s] ||= 'id desc'
 
@@ -57,16 +49,12 @@ module Spree
         @collection
       end
 
-      def promotion_includes
-        [:promotion_actions]
+      def promotion_code_batch_params
+        params.require(:promotion_code_batch).permit!
       end
 
-      def permitted_promo_builder_params
-        if params[:promotion_builder]
-          params[:promotion_builder].permit(:base_code, :number_of_codes)
-        else
-          {}
-        end
+      def promotion_includes
+        [:promotion_actions]
       end
     end
   end

@@ -74,14 +74,13 @@ module Spree
 
     has_many :variant_images, -> { order(:position) }, source: :images, through: :variants_including_master
 
-    after_create :add_associations_from_prototype
     after_create :build_variants_from_option_values_hash, if: :option_values_hash
 
     after_destroy :punch_slug
 
     after_initialize :ensure_master
 
-    after_save :run_touch_callbacks, if: :changed?
+    after_save :run_touch_callbacks, if: :saved_changes?
     after_touch :touch_taxons
 
     before_validation :normalize_slug, on: :update
@@ -92,7 +91,7 @@ module Spree
     validates :name, presence: true
     validates :price, presence: true, if: proc { Spree::Config[:require_master_price] }
     validates :shipping_category_id, presence: true
-    validates :slug, length: { minimum: 3 }, uniqueness: { allow_blank: true }
+    validates :slug, presence: true, uniqueness: { allow_blank: true }
 
     attr_accessor :option_values_hash
 
@@ -104,6 +103,10 @@ module Spree
     self.whitelisted_ransackable_associations = %w[stores variants_including_master master variants]
     self.whitelisted_ransackable_attributes = %w[slug]
 
+    def self.ransackable_scopes(_auth_object = nil)
+      %i(with_deleted with_variant_sku_cont)
+    end
+
     # @return [Boolean] true if there are any variants
     def has_variants?
       variants.any?
@@ -111,18 +114,7 @@ module Spree
 
     # @return [Spree::TaxCategory] tax category for this product, or the default tax category
     def tax_category
-      super || TaxCategory.find_by(is_default: true)
-    end
-
-    # Overrides the prototype_id setter in order to ensure it is cast to an
-    # integer.
-    #
-    # @param value [#to_i] the intended new value
-    # @!attribute [rw] prototype_id
-    #   @return [Fixnum]
-    attr_reader :prototype_id
-    def prototype_id=(value)
-      @prototype_id = value.to_i
+      super || Spree::TaxCategory.find_by(is_default: true)
     end
 
     # Ensures option_types and product_option_types exist for keys in
@@ -132,10 +124,7 @@ module Spree
     def ensure_option_types_exist_for_values_hash
       return if option_values_hash.nil?
       required_option_type_ids = option_values_hash.keys.map(&:to_i)
-      missing_option_type_ids = required_option_type_ids - option_type_ids
-      missing_option_type_ids.each do |id|
-        product_option_types.create(option_type_id: id)
-      end
+      self.option_type_ids |= required_option_type_ids
     end
 
     # Creates a new product with the same attributes, variants, etc.
@@ -230,9 +219,7 @@ module Spree
 
     # @return [Boolean] true if there are no option values
     def empty_option_values?
-      options.empty? || options.any? do |opt|
-        opt.option_type.option_values.empty?
-      end
+      options.empty? || !option_types.left_joins(:option_values).where('spree_option_values.id IS NULL').empty?
     end
 
     # @param property_name [String] the name of the property to find
@@ -249,8 +236,8 @@ module Spree
     def set_property(property_name, property_value)
       ActiveRecord::Base.transaction do
         # Works around spree_i18n https://github.com/spree/spree/issues/301
-        property = Property.create_with(presentation: property_name).find_or_create_by(name: property_name)
-        product_property = ProductProperty.where(product: self, property: property).first_or_initialize
+        property = Spree::Property.create_with(presentation: property_name).find_or_create_by(name: property_name)
+        product_property = Spree::ProductProperty.where(product: self, property: property).first_or_initialize
         product_property.value = property_value
         product_property.save!
       end
@@ -294,16 +281,6 @@ module Spree
     end
 
     private
-
-    def add_associations_from_prototype
-      if prototype_id && prototype = Spree::Prototype.find_by(id: prototype_id)
-        prototype.properties.each do |property|
-          product_properties.create(property: property)
-        end
-        self.option_types = prototype.option_types
-        self.taxons = prototype.taxons
-      end
-    end
 
     def any_variants_not_track_inventory?
       if variants_including_master.loaded?
@@ -366,10 +343,12 @@ module Spree
     # Iterate through this products taxons and taxonomies and touch their timestamps in a batch
     def touch_taxons
       taxons_to_touch = taxons.map(&:self_and_ancestors).flatten.uniq
-      Spree::Taxon.where(id: taxons_to_touch.map(&:id)).update_all(updated_at: Time.current)
+      unless taxons_to_touch.empty?
+        Spree::Taxon.where(id: taxons_to_touch.map(&:id)).update_all(updated_at: Time.current)
 
-      taxonomy_ids_to_touch = taxons_to_touch.map(&:taxonomy_id).flatten.uniq
-      Spree::Taxonomy.where(id: taxonomy_ids_to_touch).update_all(updated_at: Time.current)
+        taxonomy_ids_to_touch = taxons_to_touch.map(&:taxonomy_id).flatten.uniq
+        Spree::Taxonomy.where(id: taxonomy_ids_to_touch).update_all(updated_at: Time.current)
+      end
     end
 
     def remove_taxon(taxon)

@@ -1,105 +1,91 @@
 table {
-  width: 100%;
-  margin-bottom: 15px;
-  border-collapse: separate;
+  // Extend all tables with Bootstrap's default table style
+  @extend .table;
+  border-spacing: 0;
+
+  &.sortable td {
+    vertical-align: middle;
+  }
 
   th, td {
-    padding: 7px 5px;
-    border-right: 1px solid $color-border;
-    border-bottom: 1px solid $color-border;
-    vertical-align: middle;
     text-overflow: ellipsis;
 
-    img {
-      border: 1px solid transparent;
-    }
-
-    &:first-child {
-      border-left: 1px solid $color-border;
-    }
-
-    a {
-      border-bottom: 1px dotted lighten($color-link, 10);
-
-      &:hover {
-        border-color: lighten($color-link-hover, 10);
-      }
-    }
-
     .handle {
+      @extend .fa;
+      @extend .fa-bars;
+      cursor: move;
       display: block !important;
       text-align: center;
-      padding-right: 0;
+      padding: 3px 0;
     }
 
     &.actions {
-      background-color: transparent;
-      border: none !important;
-      text-align: center;
+      text-align: right;
+      padding-left: 1.25rem;
 
       span.text {
-        font-size: $body-font-size;
+        font-size: $font-size-base;
       }
 
-      [class*='fa-'].no-text {
+      .fa {
         font-size: 120%;
-        background-color: very-light($color-3);
-        border: 1px solid $color-border;
-        border-radius: 15px;
-        width: 29px;
-        height: 29px;
         display: inline-block;
-        padding-top: 6px;
+        padding: 2px 0;
+        text-align: center;
+        border-bottom: none;
+        vertical-align: middle;
 
         &:before {
-          text-align: center !important;
           padding: 0;
           width: 27px;
           display: inline-block;
-        }
-
-        &:hover {
-          border-color: transparent;
+          vertical-align: middle;
         }
       }
 
       button[class*='fa-'] {
-        color: $color-link;
+        color: $link-color;
+        background-color: transparent;
+        border: 0 none;
         padding: 0 !important;
+
+        &:hover {
+          background-color: transparent;
+        }
       }
 
       .fa-envelope-alt, .fa-eye-open {
-        color: $color-link;
+        color: $link-color;
         padding-left: 0px;
 
         &:hover {
-          background-color: $color-3;
-          color: $color-1;
+          color: $color-3;
         }
       }
+
       .fa-trash:hover, .fa-void:hover, .fa-failure:hover {
-        background-color: $color-error;
-        color: $color-1;
+        color: theme-color("danger");
       }
+
       .fa-cancel:hover {
-        background-color: $color-notice;
-        color: $color-1;
+        color: theme-color("warning");
       }
-      .fa-edit:hover, .fa-capture:hover, .fa-ok:hover, .fa-plus:hover, .fa-save:hover {
-        background-color: $color-success;
-        color: $color-1;
+
+      .fa-edit:hover, .fa-capture:hover, .fa-ok:hover, .fa-plus:hover,
+      .fa-save:hover, .fa-arrows-h:hover, .fa-check:hover {
+        color: theme-color("success");
       }
+
       .fa-copy:hover {
-        background-color: $color-notice;
-        color: $color-1;
+        color: theme-color("warning");
       }
+
       .fa-thumbs-up:hover {
-        background-color: $color-success;
-        color: $color-1;
+        color: theme-color("success");
       }
+
       .fa-thumbs-down:hover {
-        background-color: $color-error;
-        color: $color-1;
+        color: theme-color("danger");
       }
     }
 
@@ -107,64 +93,27 @@ table {
     input[type="text"] {
       width: 100%;
     }
-
-    &.no-border {
-      border-right: none;
-    }
-
-    .handle {
-      @extend [class^="icon-"]:before;
-      @extend .fa;
-      @extend .fa-bars;
-      cursor: move;
-    }
-
   }
 
   &.no-borders {
     td, th {
       border: none !important;
     }
-
   }
 
-  thead {
-    th {
-      padding: 10px;
-      border-top: 1px solid $color-border;
-      border-bottom: none;
-      background-color: $color-tbl-thead;
-      text-align: center;
-      font-size: 90%;
-      font-weight: $font-weight-bold;
-    }
+  th:not(.wrap-text), td.actions, td.no-wrap, .state {
+    white-space: nowrap;
+  }
+
+  th a {
+    color: $color-4;
   }
 
   tbody {
     tr {
-      &:first-child th,
-      &:first-child td {
-        border-top: 1px solid $color-border;
-      }
-      &.even td {
-        background-color: $color-tbl-even;
-
-        img {
-          border: 1px solid very-light($color-3, 6);
-        }
-      }
-
-      &:hover td {
-        background-color: very-light($color-3, 5);
-
-        img {
-          border: 1px solid $color-border;
-        }
-      }
-
       &.deleted td {
-        background-color: very-light($color-error, 6);
-        border-color: very-light($color-error, 15);
+        background-color: very-light(theme-color("danger"), 6);
+        border-color: very-light(theme-color("danger"), 15);
       }
 
       &.ui-sortable-placeholder td {
@@ -196,19 +145,6 @@ table {
 
     &.no-border-top tr:first-child td {
       border-top: none;
-    }
-
-    &.grand-total {
-      td {
-        border-color: $color-2 !important;
-        font-size: 110%;
-        font-weight: $font-weight-bold;
-        background-color: lighten($color-2, 50);
-      }
-      .total {
-        background-color: $color-2;
-        color: $color-1;
-      }
     }
   }
 }

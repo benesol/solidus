@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Refund, type: :model do
+RSpec.describe Spree::Refund, type: :model do
   describe 'create' do
     let(:amount) { 100.0 }
     let(:amount_in_cents) { amount * 100 }
@@ -158,6 +158,14 @@ describe Spree::Refund, type: :model do
           expect(error).to be_a(ActiveRecord::RecordInvalid)
           expect(error.record.errors.full_messages).to eq ["Amount #{I18n.t('activerecord.errors.models.spree/refund.attributes.amount.greater_than_allowed')}"]
         }
+      end
+    end
+
+    context 'when payment is not present' do
+      let(:refund) { build(:refund, payment: nil) }
+
+      it 'returns a validation error' do
+        expect { refund.save! }.to raise_error 'Validation failed: Payment can\'t be blank'
       end
     end
   end

@@ -11,24 +11,33 @@ module Spree
       extend Spree::DisplayMoney
 
       has_many :role_users, foreign_key: "user_id", class_name: "Spree::RoleUser", dependent: :destroy
-      has_many :spree_roles, through: :role_users, source: :role
+      has_many :spree_roles, through: :role_users, source: :role, class_name: "Spree::Role"
 
       has_many :user_stock_locations, foreign_key: "user_id", class_name: "Spree::UserStockLocation"
       has_many :stock_locations, through: :user_stock_locations
 
       has_many :spree_orders, foreign_key: "user_id", class_name: "Spree::Order"
-      has_many :orders, foreign_key: "user_id", class_name: "Spree::Order"
+      has_many :orders, foreign_key: "user_id", class_name: "Spree::Order", dependent: :restrict_with_exception
 
       has_many :store_credits, -> { includes(:credit_type) }, foreign_key: "user_id", class_name: "Spree::StoreCredit"
       has_many :store_credit_events, through: :store_credits
+
       money_methods :total_available_store_credit
+      deprecate display_total_available_store_credit: :display_available_store_credit_total, deprecator: Spree::Deprecation
+
+      has_many :credit_cards, class_name: "Spree::CreditCard", foreign_key: :user_id
+      has_many :wallet_payment_sources, foreign_key: 'user_id', class_name: 'Spree::WalletPaymentSource', inverse_of: :user
 
       after_create :auto_generate_spree_api_key
 
       include Spree::RansackableAttributes unless included_modules.include?(Spree::RansackableAttributes)
 
-      self.whitelisted_ransackable_associations = %w[addresses]
-      self.whitelisted_ransackable_attributes = %w[id email]
+      self.whitelisted_ransackable_associations = %w[addresses spree_roles]
+      self.whitelisted_ransackable_attributes = %w[id email created_at]
+    end
+
+    def wallet
+      Spree::Wallet.new(self)
     end
 
     # has_spree_role? simply needs to return true or false whether a user has a role or not.
@@ -58,6 +67,20 @@ module Spree
 
     def total_available_store_credit
       store_credits.reload.to_a.sum(&:amount_remaining)
+    end
+    deprecate total_available_store_credit: :available_store_credit_total, deprecator: Spree::Deprecation
+
+    def available_store_credit_total(currency:)
+      store_credits.reload.to_a.
+        select { |c| c.currency == currency }.
+        sum(&:amount_remaining)
+    end
+
+    def display_available_store_credit_total(currency:)
+      Spree::Money.new(
+        available_store_credit_total(currency: currency),
+        currency: currency,
+      )
     end
   end
 end

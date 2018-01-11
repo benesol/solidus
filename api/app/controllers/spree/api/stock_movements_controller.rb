@@ -5,7 +5,7 @@ module Spree
 
       def index
         authorize! :read, StockMovement
-        @stock_movements = scope.ransack(params[:q]).result.page(params[:page]).per(params[:per_page])
+        @stock_movements = paginate(scope.ransack(params[:q]).result)
         respond_with(@stock_movements)
       end
 
@@ -27,7 +27,7 @@ module Spree
       private
 
       def stock_location
-        @stock_location ||= StockLocation.accessible_by(current_ability, :read).find(params[:stock_location_id])
+        @stock_location ||= Spree::StockLocation.accessible_by(current_ability, :read).find(params[:stock_location_id])
       end
 
       def scope

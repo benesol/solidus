@@ -1,7 +1,7 @@
-require 'spec_helper'
+require 'rails_helper'
 
 module Spree
-  describe Order, type: :model do
+  RSpec.describe Order, type: :model do
     let(:order) { create(:order) }
     let(:shirt) { create(:variant) }
 

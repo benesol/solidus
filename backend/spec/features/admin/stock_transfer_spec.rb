@@ -16,19 +16,19 @@ describe 'Stock Transfers', type: :feature, js: true do
       create(:stock_location, name: 'SF')
 
       visit spree.new_admin_stock_transfer_path
-      select "SF", from: 'stock_transfer[source_location_id]'
-      fill_in 'stock_transfer_description', with: description
+      select "SF", from: 'Source Location'
+      fill_in 'Description', with: description
       click_button 'Continue'
 
       expect(page).to have_field('stock_transfer_description', with: description)
 
-      select "NY", from: 'stock_transfer[destination_location_id]'
+      select "NY", from: 'Destination Location'
       within "form.edit_stock_transfer" do
         page.find('button').trigger('click')
       end
 
       expect(page).to have_content('Stock Transfer has been successfully updated')
-      expect(page).to have_content("NY")
+      expect(page).to have_select("Destination Location", selected: 'NY')
     end
 
     # Regression spec for Solidus issue #1087
@@ -36,7 +36,7 @@ describe 'Stock Transfers', type: :feature, js: true do
       create(:stock_location_with_items, name: 'NY')
       create(:stock_location, name: 'SF')
       visit spree.new_admin_stock_transfer_path
-      fill_in 'stock_transfer_description', with: description
+      fill_in 'Description', with: description
       click_button 'Continue'
 
       expect(page).to have_content("Source location can't be blank")
@@ -65,8 +65,8 @@ describe 'Stock Transfers', type: :feature, js: true do
     let(:stock_transfer) { create(:stock_transfer_with_items) }
 
     before do
-      stock_transfer.transfer_items do |item|
-        item.update_attributes(expected_quantity: 1)
+      stock_transfer.transfer_items.each do |item|
+        item.update_attributes!(expected_quantity: 1)
       end
     end
 
@@ -85,7 +85,10 @@ describe 'Stock Transfers', type: :feature, js: true do
     describe 'with enough stock' do
       it 'ships stock transfer' do
         visit spree.tracking_info_admin_stock_transfer_path(stock_transfer)
-        click_on 'ship'
+
+        accept_confirm Spree.t('ship_stock_transfer.confirm') do
+          click_on 'Ship'
+        end
 
         expect(page).to have_current_path(spree.admin_stock_transfers_path)
         expect(stock_transfer.reload.shipped_at).to_not be_nil
@@ -102,7 +105,7 @@ describe 'Stock Transfers', type: :feature, js: true do
       it 'does not ship stock transfer' do
         visit spree.tracking_info_admin_stock_transfer_path(stock_transfer)
 
-        click_on 'ship'
+        click_on 'Ship'
 
         expect(page).to have_current_path(spree.tracking_info_admin_stock_transfer_path(stock_transfer))
         expect(stock_transfer.reload.shipped_at).to be_nil

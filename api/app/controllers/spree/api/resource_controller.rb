@@ -10,7 +10,7 @@ class Spree::Api::ResourceController < Spree::Api::BaseController
       collection_scope = collection_scope.ransack(params[:q]).result
     end
 
-    @collection = collection_scope.page(params[:page]).per(params[:per_page])
+    @collection = paginate(collection_scope)
     instance_variable_set("@#{controller_name}", @collection)
 
     respond_with(@collection)
@@ -56,6 +56,8 @@ class Spree::Api::ResourceController < Spree::Api::BaseController
     else
       invalid_resource!(@object)
     end
+  rescue ActiveRecord::DeleteRestrictionError
+    render "spree/api/errors/delete_restriction", status: 422
   end
 
   protected

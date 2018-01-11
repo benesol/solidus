@@ -1,8 +1,8 @@
-require 'spec_helper'
+require 'rails_helper'
 
 module Spree
   module Stock
-    describe Package, type: :model do
+    RSpec.describe Package, type: :model do
       let(:variant) { build(:variant, weight: 25.0) }
       let(:stock_location) { build(:stock_location) }
       let(:order) { build(:order) }

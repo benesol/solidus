@@ -1,13 +1,22 @@
-require 'spec_helper'
+require 'rails_helper'
+require 'shared_examples/calculator_shared_examples'
 
-describe Spree::Calculator::DefaultTax, type: :model do
+RSpec.describe Spree::Calculator::DefaultTax, type: :model do
   let(:address) { create(:address) }
-  let!(:zone) { create(:zone, name: "Country Zone", default_tax: true, countries: [tax_rate_country]) }
+  let!(:zone) { create(:zone, name: "Country Zone", countries: [tax_rate_country]) }
   let(:tax_rate_country) { address.country }
   let(:tax_category) { create(:tax_category) }
-  let!(:rate) { create(:tax_rate, tax_category: tax_category, amount: 0.05, included_in_price: included_in_price, zone: zone) }
+  let(:starts_at) { nil }
+  let(:expires_at) { nil }
+  let!(:rate) do
+    create(:tax_rate, tax_categories: [tax_category], amount: 0.05,
+                      included_in_price: included_in_price, zone: zone,
+                      starts_at: starts_at, expires_at: expires_at)
+  end
   let(:included_in_price) { false }
   subject(:calculator) { Spree::Calculator::DefaultTax.new(calculable: rate ) }
+
+  it_behaves_like 'a calculator with a description'
 
   context "#compute" do
     context "when given an order" do
@@ -28,6 +37,15 @@ describe Spree::Calculator::DefaultTax, type: :model do
         it "should be equal to the sum of the item totals * rate" do
           expect(calculator.compute(order)).to eq(3)
         end
+
+        context "when rate is not in its validity period" do
+          let(:starts_at) { 1.day.from_now }
+          let(:expires_at) { 2.days.from_now }
+
+          it "should be 0" do
+            expect(calculator.compute(order)).to eq(0)
+          end
+        end
       end
 
       context "when no line items match the tax category" do
@@ -46,6 +64,15 @@ describe Spree::Calculator::DefaultTax, type: :model do
 
         it "should be equal to the item total * rate" do
           expect(calculator.compute(order)).to eq(1.5)
+        end
+
+        context "when rate is not in its validity period" do
+          let(:starts_at) { 1.day.from_now }
+          let(:expires_at) { 2.days.from_now }
+
+          it "should be 0" do
+            expect(calculator.compute(order)).to eq(0)
+          end
         end
 
         context "correctly rounds to within two decimal places" do
@@ -69,18 +96,12 @@ describe Spree::Calculator::DefaultTax, type: :model do
           expect(calculator.compute(order).to_f).to eql 2.86
         end
 
-        context "when the order's tax address is outside the default VAT zone" do
-          let(:order_zone) { create(:zone, countries: [address.country]) }
-          let(:default_vat_country) { create(:country, iso: "DE") }
+        context "when rate is not in its validity period" do
+          let(:starts_at) { 1.day.from_now }
+          let(:expires_at) { 2.days.from_now }
 
-          before do
-            rate.zone.update(countries: [default_vat_country])
-            # The order has to be reloaded here because of tax zone caching.
-            order.reload
-          end
-
-          it 'creates a negative amount, indicating a VAT refund' do
-            expect(subject.compute(order)).to eq(-2.86)
+          it "should be 0" do
+            expect(calculator.compute(order)).to eq(0)
           end
         end
       end
@@ -88,7 +109,14 @@ describe Spree::Calculator::DefaultTax, type: :model do
   end
 
   shared_examples_for 'computing any item' do
-    let(:promo_total) { 0 }
+    let(:adjustment_total) { 0 }
+    let(:adjustments) do
+      if adjustment_total.zero?
+        []
+      else
+       [Spree::Adjustment.new(included: false, source: nil, amount: adjustment_total)]
+      end
+    end
     let(:order) { build_stubbed(:order, ship_address: address) }
 
     context "when tax is included in price" do
@@ -99,41 +127,55 @@ describe Spree::Calculator::DefaultTax, type: :model do
           expect(calculator.compute(item)).to eql 1.43
         end
 
-        context "when line item is discounted" do
-          let(:promo_total) { -1 }
+        context "when rate is not in its validity period" do
+          let(:starts_at) { 1.day.from_now }
+          let(:expires_at) { 2.days.from_now }
 
-          it "should be equal to the item's discounted total * rate" do
-            expect(calculator.compute(item)).to eql 1.38
+          it "should be 0" do
+            expect(calculator.compute(item)).to eq(0)
           end
         end
 
-        context "when the order's tax address is outside the default VAT zone" do
-          let!(:order_zone) { create(:zone, countries: [address.country]) }
-          let(:default_vat_country) { create(:country, iso: "DE") }
+        context "when line item is adjusted" do
+          let(:adjustment_total) { -1 }
 
-          before do
-            rate.zone.update(countries: [default_vat_country])
-          end
-
-          it 'creates a negative amount, indicating a VAT refund' do
-            expect(subject.compute(item)).to eq(-1.43)
+          it "should be equal to the item's adjusted total * rate" do
+            expect(calculator.compute(item)).to eql 1.38
           end
         end
       end
     end
 
     context "when tax is not included in price" do
-      context "when the line item is discounted" do
-        let(:promo_total) { -1 }
+      context "when the item has an adjustment" do
+        let(:adjustment_total) { -1 }
 
         it "should be equal to the item's pre-tax total * rate" do
           expect(calculator.compute(item)).to eq(1.45)
+        end
+
+        context "when rate is not in its validity period" do
+          let(:starts_at) { 1.day.from_now }
+          let(:expires_at) { 2.days.from_now }
+
+          it "should be 0" do
+            expect(calculator.compute(item)).to eq(0)
+          end
         end
       end
 
       context "when the variant matches the tax category" do
         it "should be equal to the item pre-tax total * rate" do
           expect(calculator.compute(item)).to eq(1.50)
+        end
+
+        context "when rate is not in its validity period" do
+          let(:starts_at) { 1.day.from_now }
+          let(:expires_at) { 2.days.from_now }
+
+          it "should be 0" do
+            expect(calculator.compute(item)).to eq(0)
+          end
         end
       end
     end
@@ -145,7 +187,7 @@ describe Spree::Calculator::DefaultTax, type: :model do
         :line_item,
         price: 10,
         quantity: 3,
-        promo_total: promo_total,
+        adjustments: adjustments,
         order: order,
         tax_category: tax_category
       )
@@ -174,7 +216,7 @@ describe Spree::Calculator::DefaultTax, type: :model do
       build_stubbed(
         :shipment,
         cost: 30,
-        promo_total: promo_total,
+        adjustments: adjustments,
         order: order,
         shipping_rates: [shipping_rate]
       )
@@ -199,12 +241,12 @@ describe Spree::Calculator::DefaultTax, type: :model do
     end
 
     let(:item) do
-      # cost and discounted_amount for shipping rates are the same as they
-      # can not be discounted. for the sake of passing tests, the cost is
+      # cost and adjusted amount for shipping rates are the same as they
+      # can not be adjusted. for the sake of passing tests, the cost is
       # adjusted here.
       build_stubbed(
         :shipping_rate,
-        cost: 30 + promo_total,
+        cost: 30 + adjustment_total,
         selected: true,
         shipping_method: shipping_method,
         shipment: shipment

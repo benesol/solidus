@@ -1,8 +1,8 @@
-require 'spec_helper'
+require 'rails_helper'
 
 module Spree
   module Stock
-    describe InventoryUnitBuilder, type: :model do
+    RSpec.describe InventoryUnitBuilder, type: :model do
       let(:line_item_1) { build(:line_item) }
       let(:line_item_2) { build(:line_item, quantity: 2) }
       let(:order) { build(:order, line_items: [line_item_1, line_item_2]) }

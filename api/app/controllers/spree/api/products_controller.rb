@@ -9,7 +9,7 @@ module Spree
           @products = product_scope.ransack(params[:q]).result
         end
 
-        @products = @products.distinct.page(params[:page]).per(params[:per_page])
+        @products = paginate(@products.distinct)
         expires_in 15.minutes, public: true
         headers['Surrogate-Control'] = "max-age=#{15.minutes}"
         respond_with(@products)
@@ -123,7 +123,7 @@ module Spree
 
       def set_up_shipping_category
         if shipping_category = params[:product].delete(:shipping_category)
-          id = ShippingCategory.find_or_create_by(name: shipping_category).id
+          id = Spree::ShippingCategory.find_or_create_by(name: shipping_category).id
           params[:product][:shipping_category_id] = id
         end
       end

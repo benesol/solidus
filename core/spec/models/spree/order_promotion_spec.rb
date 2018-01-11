@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::OrderPromotion do
+RSpec.describe Spree::OrderPromotion do
   subject do
     order_promotion
   end

@@ -11,6 +11,8 @@ class Spree::OrderCapturing
   self.failure_handler = ->(failures) { raise Spree::OrderCapturingFailures.new(failures.to_json) }
 
   def initialize(order, sorted_payment_method_classes = nil)
+    Spree::Deprecation.warn "Spree::OrderCapturing is deprecated and will be removed without replacement. " \
+      "Please implement your own automated capturing logic in your store."
     @order = order
     @sorted_payment_method_classes = sorted_payment_method_classes || Spree::OrderCapturing.sorted_payment_method_classes
   end
@@ -21,22 +23,15 @@ class Spree::OrderCapturing
     Spree::OrderMutex.with_lock!(@order) do
       uncaptured_amount = @order.display_total.cents
 
-      begin
-        sorted_payments(@order).each do |payment|
-          amount = [uncaptured_amount, payment.money.cents].min
+      sorted_payments(@order).each do |payment|
+        amount = [uncaptured_amount, payment.money.cents].min
 
-          if amount > 0
-            payment.capture!(amount)
-            uncaptured_amount -= amount
-          elsif Spree::OrderCapturing.void_unused_payments
-            payment.void_transaction!
-          end
+        if amount > 0
+          payment.capture!(amount)
+          uncaptured_amount -= amount
+        elsif Spree::OrderCapturing.void_unused_payments
+          payment.void_transaction!
         end
-      ensure
-        # FIXME: Adding the inverse_of on the payments relation for orders -should- fix this,
-        # however it only appears to make it worse (calling with changes three times instead of once.
-        # Warrants an investigation. Reloading for now.
-        @order.reload.update!
       end
     end
   end

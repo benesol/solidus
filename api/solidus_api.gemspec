@@ -5,6 +5,7 @@ Gem::Specification.new do |gem|
   gem.author        = 'Solidus Team'
   gem.email         = 'contact@solidus.io'
   gem.homepage      = 'http://solidus.io/'
+  gem.license       = 'BSD-3-Clause'
 
   gem.summary       = 'REST API for the Solidus e-commerce framework.'
   gem.description   = gem.summary
@@ -16,7 +17,12 @@ Gem::Specification.new do |gem|
   gem.require_paths = ["lib"]
   gem.version = Spree.solidus_version
 
+  gem.required_ruby_version = '>= 2.2.2'
+  gem.required_rubygems_version = '>= 1.8.23'
+
   gem.add_dependency 'solidus_core', gem.version
-  gem.add_dependency 'rabl', ['>= 0.9.4.pre1', '< 0.12.0']
   gem.add_dependency 'versioncake', '~> 3.0'
+  gem.add_dependency 'responders'
+  gem.add_dependency 'jbuilder', '~> 2.6'
+  gem.add_dependency 'kaminari', '>= 0.17', '< 2.0'
 end

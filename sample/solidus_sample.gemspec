@@ -8,15 +8,17 @@ Gem::Specification.new do |s|
   s.summary     = 'Sample data (including images) for use with Solidus.'
   s.description = s.summary
 
-  s.required_ruby_version = '>= 2.1.0'
   s.author      = 'Solidus Team'
   s.email       = 'contact@solidus.io'
   s.homepage    = 'http://solidus.io/'
-  s.license     = 'BSD-3'
+  s.license     = 'BSD-3-Clause'
 
   s.files        = `git ls-files`.split("\n")
   s.require_path = 'lib'
   s.requirements << 'none'
+
+  s.required_ruby_version = '>= 2.2.2'
+  s.required_rubygems_version = '>= 1.8.23'
 
   s.add_dependency 'solidus_core', s.version
 end

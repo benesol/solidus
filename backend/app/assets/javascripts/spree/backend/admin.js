@@ -14,7 +14,7 @@ under the spree namespace that do stuff we find helpful.
 Hopefully, this will evolve into a propper class.
 **/
 
-jQuery(function($) {
+Spree.ready(function() {
   // Highlight hovered table column
   $('table').on("mouseenter", 'td.actions a, td.actions button', function(){
     var tr = $(this).closest('tr');
@@ -36,8 +36,8 @@ $.fn.visible = function(cond) { this[cond ? 'show' : 'hide' ]() };
 // Apply to individual radio button that makes another element visible when checked
 $.fn.radioControlsVisibilityOfElement = function(dependentElementSelector){
   if(!this.get(0)){ return  }
-  showValue = this.get(0).value;
-  radioGroup = $("input[name='" + this.get(0).name + "']");
+  var showValue = this.get(0).value;
+  var radioGroup = $("input[name='" + this.get(0).name + "']");
   radioGroup.each(function(){
     $(this).click(function(){
       $(dependentElementSelector).visible(this.checked && this.value == showValue)
@@ -46,7 +46,7 @@ $.fn.radioControlsVisibilityOfElement = function(dependentElementSelector){
   });
 }
 
-handle_date_picker_fields = function(){
+var handle_date_picker_fields = function(){
   $('.datepicker').datepicker({
     dateFormat: Spree.translations.date_picker,
     dayNames: Spree.translations.abbr_day_names,
@@ -69,18 +69,6 @@ handle_date_picker_fields = function(){
 
 $(document).ready(function(){
   handle_date_picker_fields();
-  $(".observe_field").on('change', function() {
-    target = $(this).data("update");
-    $(target).hide();
-    Spree.ajax({ dataType: 'html',
-             url: $(this).data("base-url")+encodeURIComponent($(this).val()),
-             type: 'get',
-             success: function(data){
-               $(target).html(data);
-               $(target).show();
-             }
-    });
-  });
   var uniqueId = 1;
   $('.spree_add_fields').click(function() {
     var target = $(this).data("target");
@@ -127,7 +115,7 @@ $(document).ready(function(){
   });
 
   $('body').on('click', 'a.spree_remove_fields', function() {
-    el = $(this);
+    var el = $(this);
     el.prev("input[type=hidden]").val("1");
     el.closest(".fields").hide();
     if (el.prop("href").substr(-1) == '#') {
@@ -159,48 +147,44 @@ $(document).ready(function(){
       return ui;
   };
 
-  $('table.sortable').ready(function(){
-    var td_count = $(this).find('tbody tr:first-child td').length
-    $('table.sortable tbody').sortable(
-      {
-        handle: '.handle',
-        helper: fixHelper,
-        placeholder: 'ui-sortable-placeholder',
-        update: function(event, ui) {
-          $("#progress").show();
-          tableEl = $(ui.item).closest("table.sortable")
-          positions = {};
-          $.each(tableEl.find('tbody tr'), function(position, obj){
-            idAttr = $(obj).prop('id');
-            if (idAttr) {
-              objId = idAttr.split('_').slice(-1);
-              if (!isNaN(objId)) {
-                positions['positions['+objId+']'] = position+1;
-              }
-            }
-          });
-          Spree.ajax({
-            type: 'POST',
-            dataType: 'script',
-            url: tableEl.data("sortable-link"),
-            data: positions,
-            success: function(data){ $("#progress").hide(); }
-          });
-        },
-        start: function (event, ui) {
-          // Set correct height for placehoder (from dragged tr)
-          ui.placeholder.height(ui.item.height())
-          // Fix placeholder content to make it correct width
-          ui.placeholder.html("<td colspan='"+(td_count-1)+"'></td><td class='actions'></td>")
-        },
-        stop: function (event, ui) {
-          tableEl = $(ui.item).closest("table.sortable")
-          // Fix odd/even classes after reorder
-          tableEl.find("tr:even").removeClass("odd even").addClass("even");
-          tableEl.find("tr:odd").removeClass("odd even").addClass("odd");
+  var td_count = $(this).find('tbody tr:first-child td').length
+  $('table.sortable tbody').sortable({
+    handle: '.handle',
+    helper: fixHelper,
+    placeholder: 'ui-sortable-placeholder',
+    update: function(event, ui) {
+      $("#progress").show();
+      var tableEl = $(ui.item).closest("table.sortable")
+      var positions = {};
+      $.each(tableEl.find('tbody tr'), function(position, obj){
+        var idAttr = $(obj).prop('id');
+        if (idAttr) {
+          var objId = idAttr.split('_').slice(-1);
+          if (!isNaN(objId)) {
+            positions['positions['+objId+']'] = position+1;
+          }
         }
-
       });
+      Spree.ajax({
+        type: 'POST',
+        dataType: 'script',
+        url: tableEl.data("sortable-link"),
+        data: positions,
+        success: function(data){ $("#progress").hide(); }
+      });
+    },
+    start: function (event, ui) {
+      // Set correct height for placehoder (from dragged tr)
+      ui.placeholder.height(ui.item.height())
+      // Fix placeholder content to make it correct width
+      ui.placeholder.html("<td colspan='"+(td_count-1)+"'></td><td class='actions'></td>")
+    },
+    stop: function (event, ui) {
+      var tableEl = $(ui.item).closest("table.sortable")
+      // Fix odd/even classes after reorder
+      tableEl.find("tr:even").removeClass("odd even").addClass("even");
+      tableEl.find("tr:odd").removeClass("odd even").addClass("odd");
+    }
   });
 
   window.Spree.advanceOrder = function() {
@@ -210,7 +194,7 @@ $(document).ready(function(){
       data: {
         token: Spree.api_key
       },
-      url: Spree.routes.checkouts_api + "/" + order_number + "/advance"
+      url: Spree.routes.checkouts_api + "/" + window.order_number + "/advance"
     }).done(function() {
       window.location.reload();
     });

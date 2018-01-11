@@ -6,21 +6,21 @@ Spree.onCouponCodeApply = (e) ->
   couponStatus = $("#coupon_status")
   successClass = 'success'
   errorClass = 'alert'
-  url = Spree.url(Spree.routes.apply_coupon_code(Spree.current_order_id),
-    {
-      order_token: Spree.current_order_token,
-      coupon_code: couponCode
-    }
-  )
 
-  couponStatus.removeClass([successClass,errorClass].join(" "));
+  couponStatus.removeClass([successClass,errorClass].join(" "))
+
+  data =
+    order_token: Spree.current_order_token,
+    coupon_code: couponCode
 
   req = Spree.ajax
-    method: "PUT",
-    url: url
+    method: "PUT"
+    url: Spree.routes.apply_coupon_code(Spree.current_order_id)
+    data: JSON.stringify(data)
+    contentType: "application/json"
 
   req.done (data) ->
-    window.location.reload();
+    window.location.reload()
     couponCodeField.val('')
     couponStatus.addClass(successClass).html("Coupon code applied successfully.")
 

@@ -24,7 +24,7 @@ module Spree
       private
 
       def inventory_unit
-        @inventory_unit ||= InventoryUnit.accessible_by(current_ability, :read).find(params[:id])
+        @inventory_unit ||= Spree::InventoryUnit.accessible_by(current_ability, :read).find(params[:id])
       end
 
       def prepare_event
@@ -34,7 +34,7 @@ module Spree
 
         unless inventory_unit.respond_to?(can_event) &&
                inventory_unit.send(can_event)
-          render text: { exception: "cannot transition to #{@event}" }.to_json,
+          render json: { exception: "cannot transition to #{@event}" },
                  status: 200
           false
         end

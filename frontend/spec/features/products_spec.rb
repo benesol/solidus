@@ -36,7 +36,7 @@ describe "Visiting Products", type: :feature, inaccessible: true do
   end
 
   describe 'meta tags and title' do
-    let(:jersey) { Spree::Product.find_by_name('Ruby on Rails Baseball Jersey') }
+    let(:jersey) { Spree::Product.find_by(name: 'Ruby on Rails Baseball Jersey') }
     let(:metas) { { meta_description: 'Brand new Ruby on Rails Jersey', meta_title: 'Ruby on Rails Baseball Jersey Buy High Quality Geek Apparel', meta_keywords: 'ror, jersey, ruby' } }
 
     it 'should return the correct title when displaying a single product' do
@@ -78,13 +78,25 @@ describe "Visiting Products", type: :feature, inaccessible: true do
     end
   end
 
+  describe 'schema.org markup' do
+    let(:product) { Spree::Product.available.first }
+
+    it 'has correct schema.org/Offer attributes' do
+      expect(page).to have_css("#product_#{product.id} [itemprop='price'][content='19.99']")
+      expect(page).to have_css("#product_#{product.id} [itemprop='priceCurrency'][content='USD']")
+      click_link product.name
+      expect(page).to have_css("[itemprop='price'][content='19.99']")
+      expect(page).to have_css("[itemprop='priceCurrency'][content='USD']")
+    end
+  end
+
   context "using Russian Rubles as a currency" do
     before do
       Spree::Config[:currency] = "RUB"
     end
 
     let!(:product) do
-      product = Spree::Product.find_by_name("Ruby on Rails Ringer T-Shirt")
+      product = Spree::Product.find_by(name: "Ruby on Rails Ringer T-Shirt")
       product.price = 19.99
       product.tap(&:save)
     end
@@ -135,7 +147,7 @@ describe "Visiting Products", type: :feature, inaccessible: true do
   end
 
   context "a product with variants" do
-    let(:product) { Spree::Product.find_by_name("Ruby on Rails Baseball Jersey") }
+    let(:product) { Spree::Product.find_by(name: "Ruby on Rails Baseball Jersey") }
     let(:option_value) { create(:option_value) }
     let!(:variant) { product.variants.create!(price: 5.59) }
 
@@ -168,7 +180,7 @@ describe "Visiting Products", type: :feature, inaccessible: true do
   end
 
   context "a product with variants, images only for the variants" do
-    let(:product) { Spree::Product.find_by_name("Ruby on Rails Baseball Jersey") }
+    let(:product) { Spree::Product.find_by(name: "Ruby on Rails Baseball Jersey") }
 
     before do
       image = File.open(File.expand_path('../../fixtures/thinking-cat.jpg', __FILE__))
@@ -258,7 +270,7 @@ describe "Visiting Products", type: :feature, inaccessible: true do
   end
 
   it "should return the correct title when displaying a single product" do
-    product = Spree::Product.find_by_name("Ruby on Rails Baseball Jersey")
+    product = Spree::Product.find_by(name: "Ruby on Rails Baseball Jersey")
     click_link product.name
 
     within("div#product-description") do

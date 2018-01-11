@@ -6,9 +6,10 @@ module Spree
   class PromotionAction < Spree::Base
     acts_as_paranoid
 
-    belongs_to :promotion, class_name: 'Spree::Promotion'
+    belongs_to :promotion, class_name: 'Spree::Promotion', inverse_of: :promotion_actions
 
-    scope :of_type, ->(t) { where(type: t) }
+    scope :of_type, ->(t) { where(type: Array.wrap(t).map(&:to_s)) }
+    scope :shipping, -> { of_type(Rails.application.config.spree.promotions.shipping_actions.to_a) }
 
     # Updates the state of the order or performs some other action depending on
     # the subclass options will contain the payload from the event that
@@ -18,6 +19,27 @@ module Spree
     # @note This method should be overriden in subclassses.
     def perform(_options = {})
       raise 'perform should be implemented in a sub-class of PromotionAction'
+    end
+
+    # Removes the action from an order
+    #
+    # @note This method should be overriden in subclassses.
+    #
+    # @param order [Spree::Order] the order to remove the action from
+    # @return [void]
+    def remove_from(order)
+      Spree::Deprecation.warn("#{self.class.name.inspect} does not define #remove_from. The default behavior may be incorrect and will be removed in a future version of Solidus.", caller)
+      [order, *order.line_items, *order.shipments].each do |item|
+        item.adjustments.each do |adjustment|
+          if adjustment.source == self
+            item.adjustments.destroy(adjustment)
+          end
+        end
+      end
+    end
+
+    def to_partial_path
+      "spree/admin/promotions/actions/#{model_name.element}"
     end
   end
 end

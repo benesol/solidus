@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::ReturnAuthorization, type: :model do
+RSpec.describe Spree::ReturnAuthorization, type: :model do
   let(:order) { create(:shipped_order) }
   let(:stock_location) { create(:stock_location) }
   let(:rma_reason) { create(:return_reason) }
@@ -44,65 +44,6 @@ describe Spree::ReturnAuthorization, type: :model do
         expect(return_authorization.errors['base'].size).to eq 0
       end
     end
-
-    context "expedited exchanges are configured" do
-      let(:order)                { create(:shipped_order, line_items_count: 2) }
-      let(:exchange_return_item) { build(:exchange_return_item, inventory_unit: order.inventory_units.first) }
-      let(:return_item)          { build(:return_item, inventory_unit: order.inventory_units.last) }
-      subject                    { create(:return_authorization, order: order, return_items: [exchange_return_item, return_item]) }
-
-      before do
-        Spree::Config[:expedited_exchanges] = true
-        @pre_exchange_hooks = subject.class.pre_expedited_exchange_hooks
-      end
-
-      after do
-        subject.class.pre_expedited_exchange_hooks = @pre_exchange_hooks
-      end
-
-      context "no items to exchange" do
-        subject { create(:return_authorization, order: order) }
-
-        it "does not create a reimbursement" do
-          expect{ subject.save }.to_not change { Spree::Reimbursement.count }
-        end
-      end
-
-      context "items to exchange" do
-        it "calls pre_expedited_exchange hooks with the return items to exchange" do
-          hook = double(:as_null_object)
-          expect(hook).to receive(:call).with [exchange_return_item]
-          subject.class.pre_expedited_exchange_hooks = [hook]
-          subject.save
-        end
-
-        it "attempts to accept all return items requiring exchange" do
-          expect(exchange_return_item).to receive :attempt_accept
-          expect(return_item).not_to receive :attempt_accept
-          subject.save
-        end
-
-        it "performs an exchange reimbursement for the exchange return items" do
-          subject.save
-          reimbursement = Spree::Reimbursement.last
-          expect(reimbursement.order).to eq subject.order
-          expect(reimbursement.return_items).to eq [exchange_return_item]
-          expect(exchange_return_item.reload.exchange_shipment).to be_present
-        end
-
-        context "the reimbursement fails" do
-          before do
-            allow_any_instance_of(Spree::Reimbursement).to receive(:save) { false }
-            allow_any_instance_of(Spree::Reimbursement).to receive(:errors) { double(full_messages: "foo") }
-          end
-
-          it "puts errors on the return authorization" do
-            subject.save
-            expect(subject.errors[:base]).to include "foo"
-          end
-        end
-      end
-    end
   end
 
   describe ".before_create" do
@@ -136,7 +77,7 @@ describe Spree::ReturnAuthorization, type: :model do
     end
   end
 
-  describe "#pre_tax_total" do
+  describe "#total_excluding_vat" do
     let(:amount_1) { 15.0 }
     let!(:return_item_1) { create(:return_item, return_authorization: return_authorization, amount: amount_1) }
 
@@ -146,17 +87,29 @@ describe Spree::ReturnAuthorization, type: :model do
     let(:amount_3) { 5.0 }
     let!(:return_item_3) { create(:return_item, return_authorization: return_authorization, amount: amount_3) }
 
-    subject { return_authorization.reload.pre_tax_total }
+    subject { return_authorization.reload.total_excluding_vat }
 
     it "sums it's associated return_item's amounts" do
       expect(subject).to eq(amount_1 + amount_2 + amount_3)
     end
   end
 
-  describe "#display_pre_tax_total" do
+  describe "#display_total_excluding_vat" do
     it "returns a Spree::Money" do
-      allow(return_authorization).to receive_messages(pre_tax_total: 21.22)
-      expect(return_authorization.display_pre_tax_total).to eq(Spree::Money.new(21.22))
+      allow(return_authorization).to receive_messages(total_excluding_vat: 21.22)
+      expect(return_authorization.display_total_excluding_vat).to eq(Spree::Money.new(21.22))
+    end
+  end
+
+  describe "#amount" do
+    let(:return_item1) { create(:return_item, amount: 10) }
+    let(:return_item2) { create(:return_item, amount: 5) }
+    let(:return_authorization) { create(:return_authorization, return_items: [return_item1, return_item2]) }
+
+    subject { return_authorization.amount }
+
+    it "sums the return items' amounts" do
+      expect(subject).to eq(15)
     end
   end
 

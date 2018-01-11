@@ -1,4 +1,4 @@
-<% admin_breadcrumb(link_to Spree::Product.model_name.human(count: :other), spree.admin_products_path) %>
+<% admin_breadcrumb(link_to plural_resource_name(Spree::Product), spree.admin_products_path) %>
 <% admin_breadcrumb(Spree.t('admin.taxons.display_order')) %>
 
 <% content_for :table_filter_title do %>
@@ -6,11 +6,11 @@
 <% end %>
 
 <% content_for :table_filter do %>
-  <div data-hook="admin_orders_index_search" class="columns six">
+  <div data-hook="admin_orders_index_search" class="col-4">
     <input type='text' id='taxon_id' />
   </div>
 <% end %>
 
-<div class='sixteen columns'>
+<div class='col-10'>
   <div id='taxon_products' class='list-group'></div>
 </div>

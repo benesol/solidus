@@ -8,20 +8,20 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
 
     let(:order) { create(:order, number: "R123456789") }
 
-    before { allow(Spree::Order).to receive(:find_by_number!) { order } }
+    before { allow(Spree::Order).to receive_message_chain(:includes, :find_by!) { order } }
 
     context "#update" do
       it "updates + progresses the order" do
         expect(order).to receive(:update_attributes) { true }
         expect(order).to receive(:next) { false }
         attributes = { order_id: order.number, order: { email: "" } }
-        put :update, attributes
+        put :update, params: attributes
       end
 
       it "does refresh the shipment rates with all shipping methods" do
         expect(order).to receive(:refresh_shipment_rates)
         attributes = { order_id: order.number, order: { email: "" } }
-        put :update, attributes
+        put :update, params: attributes
       end
 
       # Regression spec
@@ -37,7 +37,7 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
         end
 
         it 'allows the updating of an email address' do
-          expect { put :update, attributes }.to change { order.reload.email }.to eq 'foo@bar.com'
+          expect { put :update, params: attributes }.to change { order.reload.email }.to eq 'foo@bar.com'
           expect(response).to be_redirect
         end
       end
@@ -53,7 +53,7 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
           }
 
           expect {
-            put :update, attributes
+            put :update, params: attributes
           }.to change{ order.reload.user }.to(assigned_user)
         end
       end
@@ -70,7 +70,7 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
           }
 
           expect {
-            put :update, attributes
+            put :update, params: attributes
           }.not_to change{ order.reload.user }
         end
       end

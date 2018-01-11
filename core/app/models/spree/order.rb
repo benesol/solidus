@@ -1,7 +1,25 @@
 require 'spree/core/validators/email'
 require 'spree/order/checkout'
+require 'spree/order/number_generator'
 
 module Spree
+  # The customers cart until completed, then acts as permanent record of the transaction.
+  #
+  # `Spree::Order` is the heart of the Solidus system, as it acts as the customer's
+  # cart as they shop. Once an order is complete, it serves as the
+  # permanent record of their purchase. It has many responsibilities:
+  #
+  # * Records and validates attributes like `total` and relationships like
+  # `Spree::LineItem` as an ActiveRecord model.
+  #
+  # * Implements a customizable state machine to manage the lifecycle of an order.
+  #
+  # * Implements business logic to provide a single interface for quesitons like
+  # `checkout_allowed?` or `payment_required?`.
+  #
+  #  * Implements an interface for mutating the order with methods like
+  # `empty!` and `fulfill!`.
+  #
   class Order < Spree::Base
     ORDER_NUMBER_LENGTH  = 9
     ORDER_NUMBER_LETTERS = false
@@ -26,17 +44,20 @@ module Spree
       go_to_state :confirm
     end
 
-    self.whitelisted_ransackable_associations = %w[shipments user promotions bill_address ship_address line_items]
+    self.whitelisted_ransackable_associations = %w[shipments user order_promotions promotions bill_address ship_address line_items]
     self.whitelisted_ransackable_attributes = %w[completed_at created_at email number state payment_state shipment_state total store_id]
 
     attr_reader :coupon_code
-    attr_accessor :temporary_address, :temporary_credit_card
+    attr_accessor :temporary_address
 
+    attr_accessor :temporary_payment_source
+    alias_method :temporary_credit_card, :temporary_payment_source
+    alias_method :temporary_credit_card=, :temporary_payment_source=
+    deprecate temporary_credit_card: :temporary_payment_source, deprecator: Spree::Deprecation
+    deprecate :temporary_credit_card= => :temporary_payment_source=, deprecator: Spree::Deprecation
+
+    # Customer info
     belongs_to :user, class_name: Spree::UserClassHandle.new
-    belongs_to :created_by, class_name: Spree::UserClassHandle.new
-    belongs_to :approver, class_name: Spree::UserClassHandle.new
-    belongs_to :canceler, class_name: Spree::UserClassHandle.new
-
     belongs_to :bill_address, foreign_key: :bill_address_id, class_name: 'Spree::Address'
     alias_attribute :billing_address, :bill_address
 
@@ -45,36 +66,48 @@ module Spree
     alias_attribute :ship_total, :shipment_total
 
     belongs_to :store, class_name: 'Spree::Store'
-    has_many :state_changes, as: :stateful
+
+    # Items
     has_many :line_items, -> { order(:created_at, :id) }, dependent: :destroy, inverse_of: :order
-    has_many :payments, dependent: :destroy
-    has_many :return_authorizations, dependent: :destroy, inverse_of: :order
-    has_many :reimbursements, inverse_of: :order
-    has_many :adjustments, -> { order(:created_at) }, as: :adjustable, inverse_of: :adjustable, dependent: :destroy
-    has_many :line_item_adjustments, through: :line_items, source: :adjustments
-    has_many :shipment_adjustments, through: :shipments, source: :adjustments
-    has_many :inventory_units, inverse_of: :order
-    has_many :products, through: :variants
     has_many :variants, through: :line_items
-    has_many :refunds, through: :payments
-    has_many :all_adjustments,
-             class_name: 'Spree::Adjustment',
-             foreign_key: :order_id,
-             dependent: :destroy,
-             inverse_of: :order
+    has_many :products, through: :variants
 
-    has_many :order_stock_locations, class_name: "Spree::OrderStockLocation"
-    has_many :stock_locations, through: :order_stock_locations
-
-    has_many :order_promotions, class_name: 'Spree::OrderPromotion'
-    has_many :promotions, through: :order_promotions
-
+    # Shipping
+    has_many :inventory_units, inverse_of: :order
     has_many :cartons, -> { distinct }, through: :inventory_units
     has_many :shipments, dependent: :destroy, inverse_of: :order do
       def states
         pluck(:state).uniq
       end
     end
+    has_many :order_stock_locations, class_name: "Spree::OrderStockLocation"
+    has_many :stock_locations, through: :order_stock_locations
+
+    # Adjustments and promotions
+    has_many :adjustments, -> { order(:created_at) }, as: :adjustable, inverse_of: :adjustable, dependent: :destroy
+    has_many :line_item_adjustments, through: :line_items, source: :adjustments
+    has_many :shipment_adjustments, through: :shipments, source: :adjustments
+    has_many :all_adjustments,
+             class_name: 'Spree::Adjustment',
+             foreign_key: :order_id,
+             dependent: :destroy,
+             inverse_of: :order
+    has_many :order_promotions, class_name: 'Spree::OrderPromotion'
+    has_many :promotions, through: :order_promotions
+
+    # Payments
+    has_many :payments, dependent: :destroy, inverse_of: :order
+
+    # Returns
+    has_many :return_authorizations, dependent: :destroy, inverse_of: :order
+    has_many :reimbursements, inverse_of: :order
+    has_many :refunds, through: :payments
+
+    # Logging
+    has_many :state_changes, as: :stateful
+    belongs_to :created_by, class_name: Spree::UserClassHandle.new
+    belongs_to :approver, class_name: Spree::UserClassHandle.new
+    belongs_to :canceler, class_name: Spree::UserClassHandle.new
 
     accepts_nested_attributes_for :line_items
     accepts_nested_attributes_for :bill_address
@@ -93,7 +126,8 @@ module Spree
     before_create :link_by_email
 
     validates :email, presence: true, if: :require_email
-    validates :email, email: true, if: :require_email, allow_blank: true
+    validates :email, email: true, allow_blank: true
+    validates :guest_token, presence: { allow_nil: true }
     validates :number, presence: true, uniqueness: { allow_blank: true }
     validates :store_id, presence: true
 
@@ -110,13 +144,6 @@ module Spree
     class_attribute :line_item_comparison_hooks
     self.line_item_comparison_hooks = Set.new
 
-    class << self
-      def by_number(number)
-        where(number: number)
-      end
-      deprecate :by_number, deprecator: Spree::Deprecation
-    end
-
     scope :created_between, ->(start_date, end_date) { where(created_at: start_date..end_date) }
     scope :completed_between, ->(start_date, end_date) { where(completed_at: start_date..end_date) }
 
@@ -124,7 +151,6 @@ module Spree
 
     # shows completed orders first, by their completed_at date, then uncompleted orders by their created_at
     scope :reverse_chronological, -> { order('spree_orders.completed_at IS NULL', completed_at: :desc, created_at: :desc) }
-    scope :unreturned_exchange, -> { joins(:shipments).where('spree_orders.created_at > spree_shipments.created_at') }
 
     def self.by_customer(customer)
       joins(:user).where("#{Spree.user_class.table_name}.email" => customer)
@@ -159,15 +185,22 @@ module Spree
       line_items.map(&:amount).sum
     end
 
-    # Sum of all line item amounts pre-tax
-    def pre_tax_item_amount
-      line_items.to_a.sum(&:pre_tax_amount)
-    end
-
     # Sum of all line item amounts after promotions, before added tax
     def discounted_item_amount
       line_items.to_a.sum(&:discounted_amount)
     end
+    deprecate discounted_item_amount: :item_total_before_tax, deprecator: Spree::Deprecation
+
+    def item_total_before_tax
+      line_items.to_a.sum(&:total_before_tax)
+    end
+
+    # Sum of all line item amounts pre-tax
+    def item_total_excluding_vat
+      line_items.to_a.sum(&:total_excluding_vat)
+    end
+    alias pre_tax_item_amount item_total_excluding_vat
+    deprecate pre_tax_item_amount: :item_total_excluding_vat, deprecator: Spree::Deprecation
 
     def currency
       self[:currency] || Spree::Config[:currency]
@@ -195,7 +228,7 @@ module Spree
 
     # Is this a free order in which case the payment step should be skipped
     def payment_required?
-      total.to_f > 0.0
+      total > 0
     end
 
     def confirmation_required?
@@ -205,12 +238,6 @@ module Spree
 
     def backordered?
       shipments.any?(&:backordered?)
-    end
-
-    # Returns the relevant zone (if any) to be used for taxation purposes.
-    # Uses default tax zone unless there is a specific match
-    def tax_zone
-      @tax_zone ||= Zone.match(tax_address) || Zone.default_tax
     end
 
     # Returns the address for taxation based on configuration
@@ -223,11 +250,20 @@ module Spree
     end
 
     def updater
-      @updater ||= OrderUpdater.new(self)
+      @updater ||= Spree::OrderUpdater.new(self)
     end
 
-    def update!
+    def recalculate
       updater.update
+    end
+
+    def update!(*args)
+      if args.empty?
+        Spree::Deprecation.warn "Calling order.update! with no arguments as a way to invoke the OrderUpdater is deprecated, since it conflicts with AR::Base#update! Please use order.recalculate instead"
+        recalculate
+      else
+        super
+      end
     end
 
     def assign_billing_to_shipping_address
@@ -271,25 +307,15 @@ module Spree
       assign_attributes(attrs_to_set)
     end
 
-    def generate_order_number(options = {})
-      options[:length]  ||= ORDER_NUMBER_LENGTH
-      options[:letters] ||= ORDER_NUMBER_LETTERS
-      options[:prefix]  ||= ORDER_NUMBER_PREFIX
-
-      possible = (0..9).to_a
-      possible += ('A'..'Z').to_a if options[:letters]
-
-      self.number ||= loop do
-        # Make a random number.
-        random = "#{options[:prefix]}#{(0...options[:length]).map { possible.sample }.join}"
-        # Use the random  number if no other order exists with it.
-        if self.class.exists?(number: random)
-          # If over half of all possible options are taken add another digit.
-          options[:length] += 1 if self.class.count > (10**options[:length] / 2)
-        else
-          break random
-        end
+    def generate_order_number(options = nil)
+      if options
+        Spree::Deprecation.warn \
+          "Passing options to Order#generate_order_number is deprecated. " \
+          "Please add your own instance of the order number generator " \
+          "with your options (#{options.inspect}) and store it as " \
+          "Spree::Config.order_number_generator in your stores config."
       end
+      self.number ||= Spree::Config.order_number_generator.generate
     end
 
     def shipped_shipments
@@ -331,19 +357,24 @@ module Spree
 
     # Creates new tax charges if there are any applicable rates. If prices already
     # include taxes then price adjustments are created instead.
+    # @deprecated This now happens during #update!
     def create_tax_charge!
-      Spree::Tax::OrderAdjuster.new(self).adjust!
+      Spree::Config.tax_adjuster_class.new(self).adjust!
+    end
+    deprecate create_tax_charge!: :update!, deprecator: Spree::Deprecation
+
+    def reimbursement_total
+      reimbursements.sum(:total)
     end
 
     def outstanding_balance
       # If reimbursement has happened add it back to total to prevent balance_due payment state
       # See: https://github.com/spree/spree/issues/6229
-      adjusted_payment_total = payment_total + refund_total
 
       if state == 'canceled'
-        -1 * adjusted_payment_total
+        -1 * payment_total
       else
-        total - adjusted_payment_total
+        total - reimbursement_total - payment_total
       end
     end
 
@@ -367,12 +398,12 @@ module Spree
 
     def credit_cards
       credit_card_ids = payments.from_credit_card.pluck(:source_id).uniq
-      CreditCard.where(id: credit_card_ids)
+      Spree::CreditCard.where(id: credit_card_ids)
     end
 
     def valid_credit_cards
       credit_card_ids = payments.from_credit_card.valid.pluck(:source_id).uniq
-      CreditCard.where(id: credit_card_ids)
+      Spree::CreditCard.where(id: credit_card_ids)
     end
 
     # Finalizes an in progress order after checkout is complete.
@@ -384,7 +415,7 @@ module Spree
       # update payment and shipment(s) states, and save
       updater.update_payment_state
       shipments.each do |shipment|
-        shipment.update!(self)
+        shipment.update_state
         shipment.finalize!
       end
 
@@ -398,13 +429,13 @@ module Spree
     end
 
     def fulfill!
-      shipments.each { |shipment| shipment.update!(self) if shipment.persisted? }
+      shipments.each { |shipment| shipment.update_state if shipment.persisted? }
       updater.update_shipment_state
       save!
     end
 
     def deliver_order_confirmation_email
-      OrderMailer.confirm_email(self).deliver_later
+      Spree::OrderMailer.confirm_email(self).deliver_later
       update_column(:confirmation_delivered, true)
     end
 
@@ -414,12 +445,11 @@ module Spree
     end
 
     def available_payment_methods
-      @available_payment_methods ||= (
-        PaymentMethod.available(:front_end, store: store) +
-        PaymentMethod.available(:both, store: store)
-      ).
-      uniq.
-      sort_by(&:position)
+      @available_payment_methods ||= Spree::PaymentMethod
+        .active
+        .available_to_store(store)
+        .available_to_users
+        .order(:position)
     end
 
     def insufficient_stock_lines
@@ -445,17 +475,15 @@ module Spree
 
     def empty!
       line_items.destroy_all
-      updater.update_item_count
       adjustments.destroy_all
       shipments.destroy_all
+      order_promotions.destroy_all
 
-      update_totals
-      persist_totals
+      recalculate
     end
 
-    def has_step?(step)
-      checkout_steps.include?(step)
-    end
+    alias_method :has_step?, :has_checkout_step?
+    deprecate has_step?: :has_checkout_step?, deprecator: Spree::Deprecation
 
     def state_changed(name)
       state = "#{name}_state"
@@ -472,6 +500,7 @@ module Spree
         end
       end
     end
+    deprecate :state_changed, deprecator: Spree::Deprecation
 
     def coupon_code=(code)
       @coupon_code = begin
@@ -496,25 +525,21 @@ module Spree
     end
 
     def create_proposed_shipments
-      return shipments if unreturned_exchange?
-
       if completed?
         raise CannotRebuildShipments.new(Spree.t(:cannot_rebuild_shipments_order_completed))
       elsif shipments.any? { |s| !s.pending? }
         raise CannotRebuildShipments.new(Spree.t(:cannot_rebuild_shipments_shipments_not_pending))
       else
-        adjustments.shipping.destroy_all
         shipments.destroy_all
         self.shipments = Spree::Config.stock.coordinator_class.new(self).shipments
       end
     end
 
-    def apply_free_shipping_promotions
-      Spree::PromotionHandler::FreeShipping.new(self).activate
-      shipments.each { |shipment| ItemAdjustments.new(shipment).update }
-      updater.update_shipment_total
-      persist_totals
+    def apply_shipping_promotions
+      Spree::PromotionHandler::Shipping.new(self).activate
+      recalculate
     end
+    deprecate apply_free_shipping_promotions: :apply_shipping_promotions, deprecator: Spree::Deprecation
 
     # Clean shipments and make order back to address state
     #
@@ -549,9 +574,9 @@ module Spree
 
     def set_shipments_cost
       shipments.each(&:update_amounts)
-      updater.update_shipment_total
-      persist_totals
+      recalculate
     end
+    deprecate set_shipments_cost: :update!, deprecator: Spree::Deprecation
 
     def is_risky?
       payments.risky.count > 0
@@ -575,11 +600,6 @@ module Spree
       !approved?
     end
 
-    def reload(options = nil)
-      remove_instance_variable(:@tax_zone) if defined?(@tax_zone)
-      super
-    end
-
     def quantity
       line_items.sum(:quantity)
     end
@@ -594,32 +614,13 @@ module Spree
       guest_token
     end
 
-    # @deprecated Do not use this method. Behaviour is unreliable.
-    def fully_discounted?
-      adjustment_total + line_items.map(&:final_amount).sum == 0.0
-    end
-    alias_method :fully_discounted, :fully_discounted?
-    deprecate :fully_discounted, deprecator: Spree::Deprecation
-
-    def unreturned_exchange?
-      # created_at - 1 is a hack to ensure that this doesn't blow up on MySQL,
-      # records loaded from the DB on MySQL will have a precision of 1 second,
-      # but records in memory may still have miliseconds on them, causing this
-      # to be true where it shouldn't be.
-      #
-      # FIXME: find a better way to determine if an order is an unreturned
-      # exchange
-      shipment = shipments.first
-      shipment.present? ? (shipment.created_at < created_at - 1) : false
-    end
-
     def tax_total
       additional_tax_total + included_tax_total
     end
 
     def add_store_credit_payments
       return if user.nil?
-      return if payments.store_credits.checkout.empty? && user.total_available_store_credit.zero?
+      return if payments.store_credits.checkout.empty? && user.available_store_credit_total(currency: currency).zero?
 
       payments.store_credits.checkout.each(&:invalidate!)
 
@@ -630,10 +631,12 @@ module Spree
 
       remaining_total = outstanding_balance - authorized_total
 
-      if user.store_credits.any?
+      matching_store_credits = user.store_credits.where(currency: currency)
+
+      if matching_store_credits.any?
         payment_method = Spree::PaymentMethod::StoreCredit.first
 
-        user.store_credits.order_by_priority.each do |credit|
+        matching_store_credits.order_by_priority.each do |credit|
           break if remaining_total.zero?
           next if credit.amount_remaining.zero?
 
@@ -656,20 +659,20 @@ module Spree
 
       payments.reset
 
-      if payments.where(state: %w(checkout pending)).sum(:amount) != total
+      if payments.where(state: %w(checkout pending completed)).sum(:amount) != total
         errors.add(:base, Spree.t("store_credit.errors.unable_to_fund")) && (return false)
       end
     end
 
     def covered_by_store_credit?
       return false unless user
-      user.total_available_store_credit >= total
+      user.available_store_credit_total(currency: currency) >= total
     end
     alias_method :covered_by_store_credit, :covered_by_store_credit?
 
     def total_available_store_credit
       return 0.0 unless user
-      user.total_available_store_credit
+      user.available_store_credit_total(currency: currency)
     end
 
     def order_total_after_store_credit
@@ -677,10 +680,10 @@ module Spree
     end
 
     def total_applicable_store_credit
-      if confirm? || complete?
+      if can_complete? || complete?
         payments.store_credits.valid.sum(:amount)
       else
-        [total, (user.try(:total_available_store_credit) || 0.0)].min
+        [total, (user.try(:available_store_credit_total, currency: currency) || 0.0)].min
       end
     end
 
@@ -692,7 +695,123 @@ module Spree
       Spree::Money.new(total_available_store_credit - total_applicable_store_credit, { currency: currency })
     end
 
+    def bill_address_attributes=(attributes)
+      self.bill_address = Spree::Address.immutable_merge(bill_address, attributes)
+    end
+
+    def ship_address_attributes=(attributes)
+      self.ship_address = Spree::Address.immutable_merge(ship_address, attributes)
+    end
+
+    # Assigns a default bill_address and ship_address to the order based on the
+    # associated user's bill_address and ship_address.
+    # @note This doesn't persist the change bill_address or ship_address
+    def assign_default_user_addresses
+      if user
+        bill_address = (user.bill_address || user.default_address)
+        ship_address = (user.ship_address || user.default_address)
+        # this is one of 2 places still using User#bill_address
+        self.bill_address ||= bill_address if bill_address.try!(:valid?)
+        # Skip setting ship address if order doesn't have a delivery checkout step
+        # to avoid triggering validations on shipping address
+        self.ship_address ||= ship_address if ship_address.try!(:valid?) && checkout_steps.include?("delivery")
+      end
+    end
+
+    alias_method :assign_default_user_addresses!, :assign_default_user_addresses
+    deprecate assign_default_user_addresses!: :assign_default_user_addresses, deprecator: Spree::Deprecation
+    alias_method :assign_default_addresses!, :assign_default_user_addresses
+    deprecate assign_default_addresses!: :assign_default_user_addresses, deprecator: Spree::Deprecation
+
+    def persist_user_address!
+      if !temporary_address && user && user.respond_to?(:persist_order_address) && bill_address_id
+        user.persist_order_address(self)
+      end
+    end
+
+    def add_payment_sources_to_wallet
+      Spree::Config.
+        add_payment_sources_to_wallet_class.new(self).
+        add_to_wallet
+    end
+    alias_method :persist_user_credit_card, :add_payment_sources_to_wallet
+    deprecate persist_user_credit_card: :add_payment_sources_to_wallet, deprecator: Spree::Deprecation
+
+    def add_default_payment_from_wallet
+      builder = Spree::Config.default_payment_builder_class.new(self)
+
+      if payment = builder.build
+        payments << payment
+
+        if bill_address.nil?
+          # this is one of 2 places still using User#bill_address
+          self.bill_address = payment.source.try(:address) ||
+                              user.bill_address
+        end
+      end
+    end
+    alias_method :assign_default_credit_card, :add_default_payment_from_wallet
+    deprecate assign_default_credit_card: :add_default_payment_from_wallet, deprecator: Spree::Deprecation
+
+    def record_ip_address(ip_address)
+      if last_ip_address != ip_address
+        update_attributes!(last_ip_address: ip_address)
+      end
+    end
+
+    def payments_attributes=(attributes)
+      validate_payments_attributes(attributes)
+      super(attributes)
+    end
+
+    def validate_payments_attributes(attributes)
+      attributes = Array(attributes)
+      # Ensure the payment methods specified are allowed for this user
+      payment_methods = Spree::PaymentMethod.where(id: available_payment_methods)
+      attributes.each do |payment_attributes|
+        payment_method_id = payment_attributes[:payment_method_id]
+
+        # raise RecordNotFound unless it is an allowed payment method
+        payment_methods.find(payment_method_id) if payment_method_id
+      end
+    end
+
     private
+
+    def process_payments_before_complete
+      return if !payment_required?
+
+      if payments.valid.empty?
+        errors.add(:base, Spree.t(:no_payment_found))
+        return false
+      end
+
+      if process_payments!
+        true
+      else
+        saved_errors = errors[:base]
+        payment_failed!
+        saved_errors.each { |error| errors.add(:base, error) }
+        false
+      end
+    end
+
+    # In case a existing credit card is provided it needs to build the payment
+    # attributes from scratch so we can set the amount. example payload:
+    #
+    #   {
+    #     "order": {
+    #       "existing_card": "2"
+    #     }
+    #   }
+    #
+    def update_params_payment_source
+      if @updating_params[:order] && (@updating_params[:order][:payments_attributes] || @updating_params[:order][:existing_card])
+        @updating_params[:order][:payments_attributes] ||= [{}]
+        @updating_params[:order][:payments_attributes].first[:amount] = total
+      end
+    end
+    deprecate update_params_payment_source: :set_payment_parameters_amount, deprecator: Spree::Deprecation
 
     def associate_store
       self.store ||= Spree::Store.default
@@ -708,7 +827,7 @@ module Spree
     end
 
     def ensure_inventory_units
-      if has_step?("delivery")
+      if has_checkout_step?("delivery")
         inventory_validator = Spree::Stock::InventoryValidator.new
 
         errors = line_items.map { |line_item| inventory_validator.validate(line_item) }.compact
@@ -717,9 +836,12 @@ module Spree
     end
 
     def ensure_promotions_eligible
-      updater.update_adjustment_total
-      if promo_total_changed?
+      adjustment_changed = all_adjustments.eligible.promotion.any? do |adjustment|
+        !adjustment.calculate_eligibility
+      end
+      if adjustment_changed
         restart_checkout_flow
+        recalculate
         errors.add(:base, Spree.t(:promotion_total_changed_before_complete))
       end
       errors.empty?
@@ -751,11 +873,11 @@ module Spree
       payments.store_credits.pending.each(&:void_transaction!)
 
       send_cancel_email
-      update!
+      recalculate
     end
 
     def send_cancel_email
-      OrderMailer.cancel_email(self).deliver_later
+      Spree::OrderMailer.cancel_email(self).deliver_later
     end
 
     def after_resume

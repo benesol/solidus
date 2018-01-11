@@ -9,10 +9,10 @@ require 'mail'
 require 'monetize'
 require 'paperclip'
 require 'paranoia'
-require 'premailer/rails'
 require 'ransack'
 require 'state_machines-activerecord'
-require 'responders'
+
+require 'spree/deprecation'
 
 # This is required because ActiveModel::Validations#invalid? conflicts with the
 # invalid state of a Payment. In the future this should be removed.
@@ -44,20 +44,10 @@ module Spree
   end
 
   module Core
-    autoload :ProductFilters, "spree/core/product_filters"
-
-    def self.const_missing(name)
-      case name
-      when :AdjustmentSource, :CalculatedAdjustments, :UserAddress, :UserPaymentSource
-        Spree::Deprecation.warn("Spree::Core::#{name} is deprecated! Use Spree::#{name} instead.", caller)
-        Spree.const_get(name)
-      else
-        super
-      end
-    end
-
     class GatewayError < RuntimeError; end
-    class DestroyWithOrdersError < StandardError; end
+
+    include ActiveSupport::Deprecation::DeprecatedConstantAccessor
+    deprecate_constant 'DestroyWithOrdersError', ActiveRecord::DeleteRestrictionError, deprecator: Spree::Deprecation
   end
 end
 
@@ -77,7 +67,6 @@ require 'spree/localized_number'
 require 'spree/money'
 require 'spree/permitted_attributes'
 
-require 'spree/core/delegate_belongs_to'
 require 'spree/core/importer'
 require 'spree/core/permalinks'
 require 'spree/core/product_duplicator'
@@ -87,18 +76,13 @@ require 'spree/core/controller_helpers/common'
 require 'spree/core/controller_helpers/order'
 require 'spree/core/controller_helpers/payment_parameters'
 require 'spree/core/controller_helpers/pricing'
-require 'spree/core/controller_helpers/respond_with'
 require 'spree/core/controller_helpers/search'
 require 'spree/core/controller_helpers/store'
 require 'spree/core/controller_helpers/strong_parameters'
-require 'spree/core/unreturned_item_charger'
 require 'spree/core/role_configuration'
 require 'spree/core/stock_configuration'
 require 'spree/permission_sets'
-require 'spree/deprecation'
 
-require 'spree/mailer_previews/order_preview'
-require 'spree/mailer_previews/carton_preview'
-require 'spree/mailer_previews/reimbursement_preview'
-
-require 'spree/core/price_migrator'
+require 'spree/preferences/store'
+require 'spree/preferences/static_model_preferences'
+require 'spree/preferences/scoped_store'

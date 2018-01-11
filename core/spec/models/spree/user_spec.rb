@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::LegacyUser, type: :model do
+RSpec.describe Spree::LegacyUser, type: :model do
   context "#last_incomplete_order" do
     let!(:user) { create(:user) }
 
@@ -92,22 +92,17 @@ describe Spree::LegacyUser, type: :model do
       end
 
       it "has payment sources" do
-        expect(user.payment_sources.first.gateway_customer_profile_id).not_to be_empty
-      end
-
-      it "drops payment source" do
         Spree::Deprecation.silence do
-          user.drop_payment_source cc
+          expect(user.payment_sources.first.gateway_customer_profile_id).not_to be_empty
         end
-        expect(cc.gateway_customer_profile_id).to be_nil
       end
     end
   end
 end
 
-describe Spree.user_class, type: :model do
+RSpec.describe Spree.user_class, type: :model do
   context "reporting" do
-    let(:order_value) { BigDecimal.new("80.94") }
+    let(:order_value) { BigDecimal("80.94") }
     let(:order_count) { 4 }
     let(:orders) { Array.new(order_count, double(total: order_value)) }
 
@@ -173,7 +168,16 @@ describe Spree.user_class, type: :model do
     end
   end
 
+  # TODO: Remove this after the method has been fully removed
   describe "#total_available_store_credit" do
+    before do
+      allow_any_instance_of(Spree::LegacyUser).to receive(:total_available_store_credit).and_wrap_original do |method, *args|
+        Spree::Deprecation.silence do
+          method.call(*args)
+        end
+      end
+    end
+
     context "user does not have any associated store credits" do
       subject { create(:user) }
 

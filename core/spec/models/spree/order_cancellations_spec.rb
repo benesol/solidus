@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::OrderCancellations do
+RSpec.describe Spree::OrderCancellations do
   describe "#cancel_unit" do
     subject { Spree::OrderCancellations.new(order).cancel_unit(inventory_unit) }
     let(:order) { create(:shipped_order, line_items_count: 1) }
@@ -131,29 +131,36 @@ describe Spree::OrderCancellations do
 
     context "when rounding is required" do
       let(:order) { create(:order_ready_to_ship, line_items_count: 1, line_items_price: 0.83) }
-      let(:line_item) { order.line_items.first }
+      let(:line_item) { order.line_items.to_a.first }
       let(:inventory_unit_1) { line_item.inventory_units[0] }
       let(:inventory_unit_2) { line_item.inventory_units[1] }
+      let(:promotion) { create(:promotion, :with_line_item_adjustment) }
+      let(:promotion_action) { promotion.actions[0] }
 
       before do
         order.contents.add(line_item.variant)
-        line_item.reload
 
         # make the total $1.67 so it divides unevenly
-        Spree::Adjustment.tax.create!(
+        line_item.adjustments.create!(
           order: order,
-          adjustable: line_item,
           amount: 0.01,
-          label: 'some fake tax',
-          finalized: true
+          label: 'some promo',
+          source: promotion_action,
+          finalized: true,
         )
-        order.update!
+        order.recalculate
       end
 
       it "generates the correct total amount" do
         order.cancellations.short_ship([inventory_unit_1])
         order.cancellations.short_ship([inventory_unit_2])
-        expect(line_item.adjustments.non_tax.sum(:amount)).to eq(-1.67)
+        expect(line_item.adjustments.map(&:amount)).to match_array(
+          [
+            0.01,  # promo adjustment
+            -0.84, # short ship 1
+            -0.83, # short ship 2
+          ]
+        )
         expect(line_item.total).to eq 0
       end
     end

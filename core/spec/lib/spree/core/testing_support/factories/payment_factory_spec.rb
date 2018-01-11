@@ -1,4 +1,4 @@
-require 'spec_helper'
+require 'rails_helper'
 require 'spree/testing_support/factories/payment_factory'
 
 RSpec.describe 'payment factory' do
@@ -13,6 +13,14 @@ RSpec.describe 'payment factory' do
       payment = create(factory)
       expect(payment.source.user).to be_present
       expect(payment.source.user).to eq payment.order.user
+    end
+
+    it 'uses the orders bill address for the credit card' do
+      address = create(:address)
+      order = create(:order, bill_address: address)
+      payment = create(factory, order: order)
+
+      expect(payment.source.address).to eq address
     end
   end
 

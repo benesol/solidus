@@ -1,7 +1,7 @@
-require 'spec_helper'
+require 'rails_helper'
 
 module Spree
-  describe Spree::PromotionRule, type: :model do
+  RSpec.describe Spree::PromotionRule, type: :model do
     class BadTestRule < Spree::PromotionRule; end
 
     class TestRule < Spree::PromotionRule
@@ -22,6 +22,11 @@ module Spree
       p2 = TestRule.new
       p2.promotion_id = 1
       expect(p2).not_to be_valid
+    end
+
+    it "generates its own partial path" do
+      rule = TestRule.new
+      expect(rule.to_partial_path).to eq 'spree/admin/promotions/rules/test_rule'
     end
   end
 end

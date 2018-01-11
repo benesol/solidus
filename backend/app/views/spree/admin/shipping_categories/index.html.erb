@@ -27,15 +27,15 @@
   </thead>
   <tbody>
     <% @shipping_categories.each do |shipping_category|%>
-    <tr id="<%= spree_dom_id shipping_category %>" data-hook="category_row" class="<%= cycle('odd', 'even')%>">
-      <td class="align-center" style="width:350px;"><%= shipping_category.name %></td>
+    <tr id="<%= spree_dom_id shipping_category %>" data-hook="category_row">
+      <td><%= shipping_category.name %></td>
       <td class="actions">
         <% if can?(:udpate, shipping_category) %>
-          <%= link_to_edit shipping_category, :no_text => true %>
+          <%= link_to_edit shipping_category, no_text: true %>
         <% end %>
 
         <% if can?(:destroy, shipping_category) %>
-          <%= link_to_delete shipping_category, :no_text => true %>
+          <%= link_to_delete shipping_category, no_text: true %>
         <% end %>
       </td>
     </tr>
@@ -43,7 +43,7 @@
   </tbody>
 </table>
 <% else %>
-  <div class="alpha twelve columns no-objects-found">
+  <div class="col-9 no-objects-found">
     <%= render 'spree/admin/shared/no_objects_found',
                  resource: Spree::ShippingCategory,
                  new_resource_url: new_object_url %>

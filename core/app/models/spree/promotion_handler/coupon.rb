@@ -94,12 +94,8 @@ module Spree
         discount ||= order.shipment_adjustments.promotion.detect(&detector)
         discount ||= order.adjustments.promotion.detect(&detector)
 
-        # Check for applied line items.
-        created_line_items = promotion.actions.detect { |a| a.type == 'Spree::Promotion::Actions::CreateLineItems' }
-
-        if (discount && discount.eligible) || created_line_items
-          order.update_totals
-          order.persist_totals
+        if discount && discount.eligible
+          order.recalculate
           set_success_code :coupon_code_applied
         elsif order.promotions.with_coupon_code(order.coupon_code)
           # if the promotion exists on an order, but wasn't found above,

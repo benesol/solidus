@@ -1,12 +1,14 @@
 module Spree
   module Admin
     class ReimbursementsController < ResourceController
+      helper 'spree/admin/reimbursement_type'
+      helper 'spree/admin/customer_returns'
       belongs_to 'spree/order', find_by: :number
 
       before_action :load_stock_locations, only: :edit
       before_action :load_simulated_refunds, only: :edit
 
-      rescue_from Spree::Core::GatewayError, with: :spree_core_gateway_error, only: :perform
+      rescue_from Spree::Core::GatewayError, with: :spree_core_gateway_error
 
       def perform
         @reimbursement.perform!
@@ -17,9 +19,9 @@ module Spree
 
       def build_resource
         if params[:build_from_customer_return_id].present?
-          customer_return = CustomerReturn.find(params[:build_from_customer_return_id])
+          customer_return = Spree::CustomerReturn.find(params[:build_from_customer_return_id])
 
-          Reimbursement.build_from_customer_return(customer_return)
+          Spree::Reimbursement.build_from_customer_return(customer_return)
         else
           super
         end

@@ -1,7 +1,7 @@
-require 'spec_helper'
+require 'rails_helper'
 
 module Spree
-  describe DisplayMoney do
+  RSpec.describe DisplayMoney do
     let(:test_class) do
       Class.new do
         extend DisplayMoney

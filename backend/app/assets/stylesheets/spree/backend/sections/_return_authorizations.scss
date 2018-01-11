@@ -1,8 +1,4 @@
-@import "spree/backend/globals/variables";
-
 .return-items-table {
-  table-layout: fixed;
-
   .refund-amount-input {
     width: 80px;
   }
@@ -13,14 +9,4 @@
     text-align: left;
     max-width: 150px;
   }
-}
-.expedited-exchanges-warning {
-  display: none;
-  color: black;
-  padding: 15px;
-  margin: 10px 0;
-  font-weight: bold;
-  background-color: $color-6;
-  border-radius: 4px;
-  opacity: 0.6;
 }

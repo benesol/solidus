@@ -24,7 +24,9 @@ module Spree
       # or removed from the views.
       def index
         @variants = scope.includes({ option_values: :option_type }, :product, :default_price, :images, { stock_items: :stock_location })
-          .ransack(params[:q]).result.page(params[:page]).per(params[:per_page])
+          .ransack(params[:q]).result
+
+        @variants = paginate(@variants)
         respond_with(@variants)
       end
 
@@ -56,15 +58,16 @@ module Spree
         if @product
           variants = @product.variants_including_master
         else
-          variants = Variant
+          variants = Spree::Variant
         end
 
         if current_ability.can?(:manage, Variant) && params[:show_deleted]
           variants = variants.with_deleted
         end
 
+        in_stock_only = ActiveRecord::Type::Boolean.new.cast(params[:in_stock_only])
         variants = variants.accessible_by(current_ability, :read)
-        variants = variants.in_stock if params[:in_stock_only] || cannot?(:view_out_of_stock, Spree::Variant)
+        variants = variants.in_stock if in_stock_only || cannot?(:view_out_of_stock, Spree::Variant)
         variants
       end
 

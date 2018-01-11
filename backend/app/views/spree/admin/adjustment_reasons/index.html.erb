@@ -28,12 +28,14 @@
     </thead>
     <tbody>
       <% @adjustment_reasons.each do |adjustment_reason| %>
-        <tr id="<%= spree_dom_id adjustment_reason %>" data-hook="adjustment_reason_row" class="<%= cycle('odd', 'even')%>">
-          <td class="align-center">
+        <tr id="<%= spree_dom_id adjustment_reason %>" data-hook="adjustment_reason_row">
+          <td>
             <%= adjustment_reason.name %>
           </td>
-          <td class="align-center">
-            <%= Spree.t(adjustment_reason.active? ? :active : :inactive) %>
+          <td>
+            <span class="pill pill-<%= adjustment_reason.active? ? 'active' : 'inactive' %>">
+              <%= Spree.t(adjustment_reason.active? ? :active : :inactive) %>
+            </span>
           </td>
           <td class="actions">
             <%= link_to_edit adjustment_reason, no_text: true %>
@@ -43,7 +45,7 @@
     </tbody>
   </table>
 <% else %>
-  <div class="alpha twelve columns no-objects-found">
+  <div class="col-9 no-objects-found">
     <%= render 'spree/admin/shared/no_objects_found',
                  resource: Spree::AdjustmentReason,
                  new_resource_url: new_object_url %>

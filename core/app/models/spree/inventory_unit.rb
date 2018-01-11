@@ -1,4 +1,6 @@
 module Spree
+  # Tracks the state of line items' fulfillment.
+  #
   class InventoryUnit < Spree::Base
     PRE_SHIPMENT_STATES = %w(backordered on_hand)
     POST_SHIPMENT_STATES = %w(returned)
@@ -19,6 +21,7 @@ module Spree
 
     before_destroy :ensure_can_destroy
 
+    scope :pending, -> { where pending: true }
     scope :backordered, -> { where state: 'backordered' }
     scope :on_hand, -> { where state: 'on_hand' }
     scope :pre_shipment, -> { where(state: PRE_SHIPMENT_STATES) }
@@ -27,7 +30,7 @@ module Spree
     scope :returned, -> { where state: 'returned' }
     scope :canceled, -> { where(state: 'canceled') }
     scope :not_canceled, -> { where.not(state: 'canceled') }
-    scope :cancelable, -> { where(state: Spree::InventoryUnit::CANCELABLE_STATES) }
+    scope :cancelable, -> { where(state: Spree::InventoryUnit::CANCELABLE_STATES, pending: false) }
     scope :backordered_per_variant, ->(stock_item) do
       includes(:shipment, :order)
         .where("spree_shipments.state != 'canceled'").references(:shipment)
@@ -125,7 +128,7 @@ module Spree
     end
 
     def percentage_of_line_item
-      1 / BigDecimal.new(line_item.quantity)
+      1 / BigDecimal(line_item.quantity)
     end
 
     def current_return_item
@@ -135,12 +138,12 @@ module Spree
     def ensure_can_destroy
       if !backordered? && !on_hand?
         errors.add(:state, :cannot_destroy, state: state)
-        return false
+        throw :abort
       end
 
-      unless shipment.pending?
+      if shipment.shipped? || shipment.canceled?
         errors.add(:base, :cannot_destroy_shipment_state, state: shipment.state)
-        return false
+        throw :abort
       end
     end
   end

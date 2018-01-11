@@ -27,7 +27,7 @@ describe 'Payments', type: :feature do
         create(:payment,
           order:          order,
           amount:         order.outstanding_balance,
-          payment_method: create(:check_payment_method) # Check
+          payment_method: create(:check_payment_method, available_to_admin: true) # Check
         )
       end
 
@@ -66,17 +66,17 @@ describe 'Payments', type: :feature do
       within_row(1) do
         expect(column_text(3)).to eq('$150.00')
         expect(column_text(4)).to eq('Credit Card')
-        expect(column_text(6)).to eq('checkout')
+        expect(column_text(6)).to eq('Checkout')
       end
 
       click_icon :void
-      expect(page).to have_css('#payment_status', text: 'balance due')
+      expect(page).to have_css('#payment_status', text: 'Balance due')
       expect(page).to have_content('Payment Updated')
 
       within_row(1) do
         expect(column_text(3)).to eq('$150.00')
         expect(column_text(4)).to eq('Credit Card')
-        expect(column_text(6)).to eq('void')
+        expect(column_text(6)).to eq('Void')
       end
 
       click_on 'New Payment'
@@ -86,7 +86,7 @@ describe 'Payments', type: :feature do
 
       click_icon(:capture)
 
-      expect(page).to have_selector('#payment_status', text: 'paid')
+      expect(page).to have_selector('#payment_status', text: 'Paid')
       expect(page).not_to have_selector('#new_payment_section')
     end
 
@@ -110,16 +110,6 @@ describe 'Payments', type: :feature do
           click_icon(:save)
           expect(page).to have_selector('td.amount span', text: '$1.00')
           expect(payment.reload.amount).to eq(1.00)
-        end
-      end
-
-      it 'allows the amount to be edited by clicking on the amount then saving' do
-        within_row(1) do
-          find('td.amount span').click
-          fill_in('amount', with: '$1.01')
-          click_icon(:save)
-          expect(page).to have_selector('td.amount span', text: '$1.01')
-          expect(payment.reload.amount).to eq(1.01)
         end
       end
 
@@ -195,10 +185,13 @@ describe 'Payments', type: :feature do
 
     context "user existing card" do
       let!(:cc) do
-        create(:credit_card, user_id: order.user_id, payment_method: payment_method, gateway_customer_profile_id: "BGS-RFRE")
+        create(:credit_card, payment_method: payment_method, gateway_customer_profile_id: "BGS-RFRE")
       end
 
-      before { visit spree.admin_order_payments_path(order) }
+      before do
+        order.user.wallet.add(cc)
+        visit spree.admin_order_payments_path(order)
+      end
 
       it "is able to reuse customer payment source" do
         expect(find("#card_#{cc.id}")).to be_checked

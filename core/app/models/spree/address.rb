@@ -1,15 +1,19 @@
 module Spree
+  # `Spree::Address` provides the foundational ActiveRecord model for recording and
+  # validating address information for `Spree::Order`, `Spree::Shipment`,
+  # `Spree::UserAddress`, and `Spree::Carton`.
+  #
   class Address < Spree::Base
-    require 'twitter_cldr'
+    extend ActiveModel::ForbiddenAttributesProtection
 
     belongs_to :country, class_name: "Spree::Country"
     belongs_to :state, class_name: "Spree::State"
 
-    validates :firstname, :lastname, :address1, :city, :country_id, presence: true
+    validates :firstname, :address1, :city, :country_id, presence: true
     validates :zipcode, presence: true, if: :require_zipcode?
     validates :phone, presence: true, if: :require_phone?
 
-    validate :state_validate, :postal_code_validate
+    validate :state_validate
 
     alias_attribute :first_name, :firstname
     alias_attribute :last_name, :lastname
@@ -27,15 +31,6 @@ module Spree
       new(country: Spree::Country.default)
     end
 
-    def self.default(user = nil, kind = "bill")
-      Spree::Deprecation.warn("Address.default is deprecated. Use User.default_address or Address.build_default", caller)
-      if user
-        user.send(:"#{kind}_address") || build_default
-      else
-        build_default
-      end
-    end
-
     # @return [Address] an equal address already in the database or a newly created one
     def self.factory(attributes)
       full_attributes = value_attributes(column_defaults, new(attributes).attributes)
@@ -45,6 +40,9 @@ module Spree
     # @return [Address] address from existing address plus new_attributes as diff
     # @note, this may return existing_address if there are no changes to value equality
     def self.immutable_merge(existing_address, new_attributes)
+      # Ensure new_attributes is a sanitized hash
+      new_attributes = sanitize_for_mass_assignment(new_attributes)
+
       return factory(new_attributes) if existing_address.nil?
 
       merged_attributes = value_attributes(existing_address.attributes, new_attributes)
@@ -105,18 +103,29 @@ module Spree
       value_attributes == other_address.value_attributes
     end
 
+    # @deprecated Do not use this. Use Address.== instead.
     def same_as?(other_address)
-      Spree::Deprecation.warn("Address.same_as? is deprecated. It's equivalent to Address.==", caller)
+      Spree::Deprecation.warn("Address#same_as? is deprecated. It's equivalent to Address.==", caller)
       self == other_address
     end
 
+    # @deprecated Do not use this. Use Address.== instead.
     def same_as(other_address)
-      Spree::Deprecation.warn("Address.same_as is deprecated. It's equivalent to Address.==", caller)
+      Spree::Deprecation.warn("Address#same_as is deprecated. It's equivalent to Address.==", caller)
       self == other_address
     end
 
+    # @deprecated Do not use this
     def empty?
+      Spree::Deprecation.warn("Address#empty? is deprecated.", caller)
       attributes.except('id', 'created_at', 'updated_at', 'country_id').all? { |_, v| v.nil? }
+    end
+
+    # This exists because the default Object#blank?, checks empty? if it is
+    # defined, and we have defined empty.
+    # This should be removed once empty? is removed
+    def blank?
+      false
     end
 
     # @return [Hash] an ActiveMerchant compatible address hash
@@ -157,7 +166,11 @@ module Spree
     # @return [Country] setter that sets self.country to the Country with a matching 2 letter iso
     # @raise [ActiveRecord::RecordNotFound] if country with the iso doesn't exist
     def country_iso=(iso)
-      self.country = Country.find_by!(iso: iso)
+      self.country = Spree::Country.find_by!(iso: iso)
+    end
+
+    def country_iso
+      country && country.iso
     end
 
     private
@@ -182,7 +195,7 @@ module Spree
       # ensure state_name belongs to country without states, or that it matches a predefined state name/abbr
       if state_name.present?
         if country.states.present?
-          states = country.states.find_all_by_name_or_abbr(state_name)
+          states = country.states.with_name_or_abbr(state_name)
 
           if states.size == 1
             self.state = states.first
@@ -195,14 +208,6 @@ module Spree
 
       # ensure at least one state field is populated
       errors.add :state, :blank if state.blank? && state_name.blank?
-    end
-
-    def postal_code_validate
-      return if country.blank? || country.iso.blank? || !require_zipcode?
-      return if !TwitterCldr::Shared::PostalCodes.territories.include?(country.iso.downcase.to_sym)
-
-      postal_code = TwitterCldr::Shared::PostalCodes.for_territory(country.iso)
-      errors.add(:zipcode, :invalid) if !postal_code.valid?(zipcode.to_s)
     end
   end
 end

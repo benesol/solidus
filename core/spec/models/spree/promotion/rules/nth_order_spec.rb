@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Promotion::Rules::NthOrder do
+RSpec.describe Spree::Promotion::Rules::NthOrder do
   describe "#applicable?" do
     subject { described_class.new.applicable?(promotable) }
 

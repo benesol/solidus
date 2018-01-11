@@ -20,7 +20,7 @@ module Spree
     attr_writer :rebuild_vat_prices
     include Spree::DefaultPrice
 
-    belongs_to :product, -> { with_deleted }, touch: true, class_name: 'Spree::Product', inverse_of: :variants
+    belongs_to :product, -> { with_deleted }, touch: true, class_name: 'Spree::Product', inverse_of: :variants, optional: false
     belongs_to :tax_category, class_name: 'Spree::TaxCategory'
 
     delegate :name, :description, :slug, :available_on, :shipping_category_id,
@@ -69,6 +69,7 @@ module Spree
     after_create :set_position
     after_create :set_master_out_of_stock, unless: :is_master?
 
+    after_save :clear_in_stock_cache
     after_touch :clear_in_stock_cache
 
     after_real_destroy :destroy_option_values_variants

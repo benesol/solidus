@@ -16,14 +16,12 @@ module Spree
 
       attr_accessor :current_api_user
 
-      class_attribute :error_notifier
-
       before_action :load_user
       before_action :authorize_for_order, if: proc { order_token.present? }
       before_action :authenticate_user
       before_action :load_user_roles
 
-      rescue_from StandardError, with: :error_during_processing
+      rescue_from ActionController::ParameterMissing, with: :parameter_missing_error
       rescue_from ActiveRecord::RecordNotFound, with: :not_found
       rescue_from CanCan::AccessDenied, with: :unauthorized
       rescue_from Spree::Core::GatewayError, with: :gateway_error
@@ -67,19 +65,17 @@ module Spree
         render "spree/api/errors/unauthorized", status: 401
       end
 
-      def error_during_processing(exception)
-        Rails.logger.error exception.message
-        Rails.logger.error exception.backtrace.join("\n")
-
-        error_notifier.call(exception, self) if error_notifier
-
-        render text: { exception: exception.message }.to_json,
-          status: 422
-      end
-
       def gateway_error(exception)
         @order.errors.add(:base, exception.message)
         invalid_resource!(@order)
+      end
+
+      def parameter_missing_error(exception)
+        render json: {
+          exception: exception.message,
+          error: exception.message,
+          missing_param: exception.param
+        }, status: 422
       end
 
       def requires_authentication?
@@ -117,13 +113,13 @@ module Spree
 
       def product_scope
         if can?(:admin, Spree::Product)
-          scope = Product.with_deleted.accessible_by(current_ability, :read).includes(*product_includes)
+          scope = Spree::Product.with_deleted.accessible_by(current_ability, :read).includes(*product_includes)
 
           unless params[:show_deleted]
             scope = scope.not_deleted
           end
         else
-          scope = Product.accessible_by(current_ability, :read).available.includes(*product_includes)
+          scope = Spree::Product.accessible_by(current_ability, :read).available.includes(*product_includes)
         end
 
         scope
@@ -149,7 +145,7 @@ module Spree
       def lock_order
         OrderMutex.with_lock!(@order) { yield }
       rescue Spree::OrderMutex::LockFailed => e
-        render text: e.message, status: 409
+        render plain: e.message, status: 409
       end
 
       def insufficient_stock_error(exception)
@@ -161,6 +157,16 @@ module Spree
           },
           status: 422
         )
+      end
+
+      def paginate(resource)
+        resource.
+          page(params[:page]).
+          per(params[:per_page] || default_per_page)
+      end
+
+      def default_per_page
+        Kaminari.config.default_per_page
       end
     end
   end

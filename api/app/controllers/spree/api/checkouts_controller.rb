@@ -8,19 +8,11 @@ module Spree
       rescue_from Spree::Order::InsufficientStock, with: :insufficient_stock_error
 
       include Spree::Core::ControllerHelpers::Order
+
       # TODO: Remove this after deprecated usage in #update is removed
       include Spree::Core::ControllerHelpers::PaymentParameters
 
-      # This before_action comes from Spree::Core::ControllerHelpers::Order
-      skip_before_action :set_current_order
-
       def next
-        if @order.confirm?
-          Spree::Deprecation.warn "Using Spree::Api::CheckoutsController#next to transition to complete is deprecated. Please use #complete instead of #next.", caller
-          complete
-          return
-        end
-
         authorize! :update, @order, order_token
         if !expected_total_ok?(params[:expected_total])
           respond_with(@order, default_template: 'spree/api/orders/expected_total_mismatch', status: 400)
@@ -93,16 +85,6 @@ module Spree
       def massaged_params
         massaged_params = params.deep_dup
 
-        if params[:payment_source].present?
-          Spree::Deprecation.warn("Passing payment_source is deprecated. Send source parameters inside payments_attributes[:source_attributes].", caller)
-          move_payment_source_into_payments_attributes(massaged_params)
-        end
-
-        if params[:order] && params[:order][:existing_card].present?
-          Spree::Deprecation.warn("Passing order[:existing_card] is deprecated. Send existing_card_id inside of payments_attributes[:source_attributes].", caller)
-          move_existing_card_into_payments_attributes(massaged_params)
-        end
-
         set_payment_parameters_amount(massaged_params, @order)
 
         massaged_params
@@ -130,11 +112,12 @@ module Spree
 
       def after_update_attributes
         if params[:order] && params[:order][:coupon_code].present?
-          handler = PromotionHandler::Coupon.new(@order).apply
+          handler = PromotionHandler::Coupon.new(@order)
+          handler.apply
 
           if handler.error.present?
             @coupon_message = handler.error
-            respond_with(@order, default_template: 'spree/api/orders/could_not_apply_coupon')
+            respond_with(@order, default_template: 'spree/api/orders/could_not_apply_coupon', status: 422)
             return true
           end
         end

@@ -8,7 +8,7 @@ FactoryGirl.define do
     aliases: [
       :base_shipping_method
     ],
-    class: Spree::ShippingMethod
+    class: 'Spree::ShippingMethod'
   ) do
     zones do
       [Spree::Zone.find_by(name: 'GlobalZone') || FactoryGirl.create(:global_zone)]
@@ -23,7 +23,7 @@ FactoryGirl.define do
 
     transient do
       cost 10.0
-      currency 'USD'
+      currency { Spree::Config[:currency] }
     end
 
     before(:create) do |shipping_method, _evaluator|
@@ -32,7 +32,7 @@ FactoryGirl.define do
       end
     end
 
-    factory :free_shipping_method, class: Spree::ShippingMethod do
+    factory :free_shipping_method, class: 'Spree::ShippingMethod' do
       cost nil
       association(:calculator, factory: :shipping_no_amount_calculator, strategy: :build)
     end

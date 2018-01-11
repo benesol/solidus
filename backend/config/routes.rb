@@ -13,16 +13,15 @@ Spree::Core::Engine.routes.draw do
       resources :promotion_rules
       resources :promotion_actions
       resources :promotion_codes, only: [:index]
+      resources :promotion_code_batches, only: [:index, :new, :create] do
+        get '/download', to: "promotion_code_batches#download", defaults: { format: "csv" }
+      end
     end
 
     resources :promotion_categories, except: [:show]
 
     resources :zones
 
-    resources :countries do
-      resources :states
-    end
-    resources :states
     resources :tax_categories
 
     resources :products do
@@ -42,7 +41,7 @@ Spree::Core::Engine.routes.draw do
         end
       end
       member do
-        get :clone
+        post :clone
       end
       resources :variants do
         collection do
@@ -70,16 +69,6 @@ Spree::Core::Engine.routes.draw do
     end
 
     delete '/product_properties/:id', to: "product_properties#destroy", as: :product_property
-
-    resources :prototypes do
-      member do
-        get :select
-      end
-
-      collection do
-        get :available
-      end
-    end
 
     resources :orders, except: [:show] do
       member do
@@ -130,7 +119,8 @@ Spree::Core::Engine.routes.draw do
       end
     end
 
-    resource :general_settings, only: [:edit, :update]
+    resource :general_settings, only: :edit
+    resources :stores, only: [:index, :new, :create, :edit, :update]
 
     resources :return_items, only: [:update]
 
@@ -173,7 +163,7 @@ Spree::Core::Engine.routes.draw do
     end
 
     resources :stock_locations do
-      resources :stock_movements, except: [:edit, :update, :destroy]
+      resources :stock_movements, only: [:index]
       collection do
         post :transfer_stock
         post :update_positions
@@ -183,7 +173,6 @@ Spree::Core::Engine.routes.draw do
     resources :stock_items, except: [:show, :new, :edit]
     resources :tax_rates
 
-    resources :trackers
     resources :payment_methods do
       collection do
         post :update_positions

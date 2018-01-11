@@ -25,7 +25,7 @@ module Spree
       end
 
       def update_totals
-        @order.reload.update!
+        @order.reload.recalculate
       end
 
       # Override method used to create a new instance to correctly
@@ -36,7 +36,7 @@ module Spree
 
       def reasons_for(_adjustment)
         [
-          AdjustmentReason.active.to_a,
+          Spree::AdjustmentReason.active.to_a,
           @adjustment.adjustment_reason
         ].flatten.compact.uniq.sort_by { |r| r.name.downcase }
       end

@@ -25,10 +25,10 @@
     <%- row_count = @stock_item_stock_locations.count + 2 %>
     <tbody class="variant-stock-items">
       <tr id="<%= spree_dom_id variant %>">
-        <td class="align-center no-padding" rowspan="<%= row_count %>">
+        <td class="no-padding" rowspan="<%= row_count %>">
           <div class='variant-container'>
             <div class='variant-image'>
-              <%= image_tag(variant.display_image(fallback: false).attachment(:small)) %>
+              <%= render 'spree/admin/shared/image', image: variant.display_image(fallback: false), size: :small %>
             </div>
             <div class='variant-details'>
               <table class='stock-variant-field-table'>
@@ -46,7 +46,7 @@
             </div>
           </div>
         </td>
-        <td class="align-center" rowspan="<%= row_count %>">
+        <td rowspan="<%= row_count %>">
           <table class='stock-variant-field-table'>
             <% variant.option_values.sort_by(&:option_type_name).each do |option_value| %>
               <tr>
@@ -69,7 +69,7 @@
       <% if display_add_row %>
         <tr class="js-add-stock-item stock-item-edit-row" data-variant-id="<%= variant.id %>">
           <td class='location-name-cell'>
-            <%= select_tag :stock_location_id, options_from_collection_for_select(locations_without_items, :id, :name), { :include_blank => true, :class => 'select2', "data-placeholder" => Spree.t(:add_to_stock_location), :id => "variant-stock-location-#{variant.id}" } %>
+            <%= select_tag :stock_location_id, options_from_collection_for_select(locations_without_items, :id, :name), { include_blank: true, class: 'custom-select', "data-placeholder" => Spree.t(:add_to_stock_location), id: "variant-stock-location-#{variant.id}" } %>
           </td>
           <td class="align-center">
             <%= check_box_tag :backorderable, 'backorderable', false, id: "variant-backorderable-#{variant.id}" %>
@@ -78,7 +78,7 @@
             <%= number_field_tag :count_on_hand, "", class: 'fullwidth', id: "variant-count-on-hand-#{variant.id}" %>
           </td>
           <td class="actions">
-            <%= link_to_with_icon 'plus', Spree.t('actions.create'), '#', :no_text => true, :data => {:action => 'green' }, class: "submit" %>
+            <%= link_to_with_icon 'plus', Spree.t('actions.create'), '#', no_text: true, data: { action: 'add' }, class: "submit" %>
           </td>
         </tr>
       <% end %>

@@ -9,4 +9,9 @@ Spree.disableSaveOnClick = ->
     ($ this).find(':submit, :image').attr('disabled', true).removeClass('primary').addClass 'disabled'
 
 Spree.ready ($) ->
-  Spree.Checkout = {}
+  termsCheckbox = ($ '#accept_terms_and_conditions')
+  termsCheckbox.change( () ->
+    submitBtn = $(this.closest('form')).find(':submit')
+    submitBtn.prop('disabled', !this.checked)
+    submitBtn.toggleClass('disabled', !this.checked)
+  )

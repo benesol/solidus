@@ -1,5 +1,15 @@
 module Spree
+  # Variants placed in the Order at a particular price.
+  #
+  # `Spree::LineItem` is an ActiveRecord model which records which `Spree::Variant`
+  # a customer has chosen to place in their order. It also acts as the permenent
+  # record of the customer's order by recording relevant price, taxation, and inventory
+  # concerns. Line items can also have adjustments placed on them as part of the
+  # promotion system.
+  #
   class LineItem < Spree::Base
+    class CurrencyMismatch < StandardError; end
+
     belongs_to :order, class_name: "Spree::Order", inverse_of: :line_items, touch: true
     belongs_to :variant, -> { with_deleted }, class_name: "Spree::Variant", inverse_of: :line_items
     belongs_to :tax_category, class_name: "Spree::TaxCategory"
@@ -21,21 +31,14 @@ module Spree
       greater_than: -1
     }
     validates :price, numericality: true
-    validate :ensure_proper_currency
-
-    after_create :update_tax_charge
 
     after_save :update_inventory
-    after_save :update_adjustments
 
     before_destroy :update_inventory
     before_destroy :destroy_inventory_units
 
     delegate :name, :description, :sku, :should_track_inventory?, to: :variant
-    # @note This will return the product even if it has been deleted.
-    # @return [Spree::Product, nil] the product associated with this line
-    #   item, if there is one
-    delegate :product, to: :variant
+    delegate :currency, to: :order, allow_nil: true
 
     attr_accessor :target_shipment
 
@@ -54,24 +57,41 @@ module Spree
     def discounted_amount
       amount + promo_total
     end
+    deprecate discounted_amount: :total_before_tax, deprecator: Spree::Deprecation
 
     # @return [BigDecimal] the amount of this line item, taking into
     #   consideration all its adjustments.
-    def final_amount
+    def total
       amount + adjustment_total
     end
-    alias total final_amount
+    alias final_amount total
+    deprecate final_amount: :total, deprecator: Spree::Deprecation
 
-    # @return [BigDecimal] the amount of this line item before included tax
-    # @note just like `amount`, this does not include any additional tax
-    def pre_tax_amount
-      discounted_amount - included_tax_total
+    # @return [BigDecimal] the amount of this item, taking into consideration
+    #   all non-tax adjustments.
+    def total_before_tax
+      amount + adjustments.select { |a| !a.tax? && a.eligible? }.sum(&:amount)
     end
 
+    # @return [BigDecimal] the amount of this line item before VAT tax
+    # @note just like `amount`, this does not include any additional tax
+    def total_excluding_vat
+      total_before_tax - included_tax_total
+    end
+    alias pre_tax_amount total_excluding_vat
+    deprecate pre_tax_amount: :total_excluding_vat, deprecator: Spree::Deprecation
+
     extend Spree::DisplayMoney
-    money_methods :amount, :discounted_amount, :final_amount, :pre_tax_amount, :price,
-                  :included_tax_total, :additional_tax_total
+    money_methods :amount, :discounted_amount, :price,
+                  :included_tax_total, :additional_tax_total,
+                  :total, :total_before_tax, :total_excluding_vat
+    deprecate display_discounted_amount: :display_total_before_tax, deprecator: Spree::Deprecation
+    alias display_final_amount display_total
+    deprecate display_final_amount: :display_total, deprecator: Spree::Deprecation
+    alias display_pre_tax_amount display_total_excluding_vat
+    deprecate display_pre_tax_amount: :display_total_excluding_vat, deprecator: Spree::Deprecation
     alias discounted_money display_discounted_amount
+    deprecate discounted_money: :display_total_before_tax, deprecator: Spree::Deprecation
 
     # @return [Spree::Money] the price of this line item
     alias money_price display_price
@@ -81,13 +101,19 @@ module Spree
     # @return [Spree::Money] the amount of this line item
     alias money display_amount
     alias display_total display_amount
+    deprecate display_total: :display_amount, deprecator: Spree::Deprecation
 
-    # Sets price and currency from a `Spree::Money` object
+    # Sets price from a `Spree::Money` object
     #
-    # @param [Spree::Money] money - the money object to obtain price and currency from
+    # @param [Spree::Money] money - the money object to obtain price from
     def money_price=(money)
-      self.price = money.to_d
-      self.currency = money.currency.iso_code
+      if !money
+        self.price = nil
+      elsif money.currency.iso_code != currency
+        raise CurrencyMismatch, "Line item price currency must match order currency!"
+      else
+        self.price = money.to_d
+      end
     end
 
     # @return [Boolean] true when it is possible to supply the required
@@ -112,7 +138,10 @@ module Spree
 
       assign_attributes options
 
-      # There's no need to call a pricer if we'll set the price directly.
+      # When price is part of the options we are not going to fetch
+      # it from the variant. Please note that this always allows to set
+      # a price for this line item, even if there is no existing price
+      # for the associated line item in the order currency.
       unless options.key?(:price) || options.key?('price')
         self.money_price = variant.price_for(pricing_options)
       end
@@ -120,6 +149,12 @@ module Spree
 
     def pricing_options
       Spree::Config.pricing_options_class.from_line_item(self)
+    end
+
+    def currency=(_currency)
+      Spree::Deprecation.warn 'Spree::LineItem#currency= is deprecated ' \
+        'and will take no effect.',
+        caller
     end
 
     private
@@ -143,7 +178,6 @@ module Spree
       # If the legacy method #copy_price has been overridden, handle that gracefully
       return handle_copy_price_override if respond_to?(:copy_price)
 
-      self.currency ||= order.currency
       self.cost_price ||= variant.cost_price
       self.money_price = variant.price_for(pricing_options) if price.nil?
       true
@@ -158,37 +192,13 @@ module Spree
     end
 
     def update_inventory
-      if (changed? || target_shipment.present?) && order.has_checkout_step?("delivery")
+      if (saved_changes? || target_shipment.present?) && order.has_checkout_step?("delivery")
         Spree::OrderInventory.new(order, self).verify(target_shipment)
       end
     end
 
     def destroy_inventory_units
       inventory_units.destroy_all
-    end
-
-    def update_adjustments
-      if quantity_changed?
-        update_tax_charge # Called to ensure pre_tax_amount is updated.
-        recalculate_adjustments
-      end
-    end
-
-    def recalculate_adjustments
-      Spree::ItemAdjustments.new(self).update
-    end
-
-    def update_tax_charge
-      Spree::Tax::ItemAdjuster.new(self).adjust!
-    end
-
-    def ensure_proper_currency
-      if currency != order.currency
-        Spree::Deprecation.warn "The line items currency is different from it's order currency. " \
-                                "This behavior is not supported anymore and will be deleted soon.",
-                                caller
-        errors.add(:currency, :must_match_order_currency)
-      end
     end
   end
 end

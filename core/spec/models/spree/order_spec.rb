@@ -1,15 +1,17 @@
-require 'spec_helper'
+require 'rails_helper'
 
-class FakeCalculator < Spree::Calculator
-  def compute(_computable)
-    5
+RSpec.describe Spree::Order, type: :model do
+  let(:store) { create(:store) }
+  let(:user) { create(:user, email: "spree@example.com") }
+  let(:order) { create(:order, user: user, store: store) }
+  let(:promotion) do
+    FactoryGirl.create(
+      :promotion,
+      :with_order_adjustment,
+      code: "discount"
+    )
   end
-end
-
-describe Spree::Order, type: :model do
-  let(:store) { build_stubbed(:store) }
-  let(:user) { stub_model(Spree::LegacyUser, email: "spree@example.com") }
-  let(:order) { stub_model(Spree::Order, user: user, store: store) }
+  let(:code) { promotion.codes.first }
 
   before do
     allow(Spree::LegacyUser).to receive_messages(current: mock_model(Spree::LegacyUser, id: 123))
@@ -113,10 +115,11 @@ describe Spree::Order, type: :model do
 
     it "update and persist totals" do
       expect(shipment).to receive :update_amounts
-      expect(order.updater).to receive :update_shipment_total
-      expect(order.updater).to receive :persist_totals
+      expect(order.updater).to receive :update
 
-      order.set_shipments_cost
+      Spree::Deprecation.silence do
+        order.set_shipments_cost
+      end
     end
   end
 
@@ -176,12 +179,14 @@ describe Spree::Order, type: :model do
       create(:line_item, order: order)
       create(:shipment, order: order)
       create(:adjustment, adjustable: order, order: order)
-      order.update!
+      promotion.activate(order: order, promotion_code: code)
+      order.recalculate
 
       # Make sure we are asserting changes
       expect(order.line_items).not_to be_empty
       expect(order.shipments).not_to be_empty
       expect(order.adjustments).not_to be_empty
+      expect(order.promotions).not_to be_empty
       expect(order.item_total).not_to eq 0
       expect(order.item_count).not_to eq 0
       expect(order.shipment_total).not_to eq 0
@@ -193,10 +198,26 @@ describe Spree::Order, type: :model do
       expect(order.line_items).to be_empty
       expect(order.shipments).to be_empty
       expect(order.adjustments).to be_empty
+      expect(order.promotions).to be_empty
       expect(order.item_total).to eq 0
       expect(order.item_count).to eq 0
       expect(order.shipment_total).to eq 0
       expect(order.adjustment_total).to eq 0
+    end
+  end
+
+  context '#outstanding_balance' do
+    let(:order) { create(:order_ready_to_ship, line_items_count: 3) }
+    let(:payment) { order.payments.first }
+
+    it "should handle refunds properly" do
+      order.cancellations.short_ship([order.inventory_units.first])
+      expect(order.outstanding_balance).to be_negative
+      expect(order.payment_state).to eq('credit_owed')
+      create(:refund, amount: order.outstanding_balance.abs, payment: payment, transaction_id: nil)
+      order.reload
+      expect(order.outstanding_balance).to eq(0)
+      expect(order.payment_state).to eq('paid')
     end
   end
 
@@ -292,7 +313,7 @@ describe Spree::Order, type: :model do
     it "calls hook during update" do
       order = create(:order)
       expect(order).to receive(:add_awesome_sauce)
-      order.update!
+      order.recalculate
     end
 
     it "calls hook during finalize" do
@@ -496,7 +517,9 @@ describe Spree::Order, type: :model do
       order.update_column(:payment_state, 'balance_due')
       order.payment_state = 'paid'
       expect(order.state_changes).to be_empty
-      order.state_changed('payment')
+      Spree::Deprecation.silence do
+        order.state_changed('payment')
+      end
       state_change = order.state_changes.find_by(name: 'payment')
       expect(state_change.previous_state).to eq('balance_due')
       expect(state_change.next_state).to eq('paid')
@@ -505,7 +528,9 @@ describe Spree::Order, type: :model do
     it "does not do anything if state does not change" do
       order.update_column(:payment_state, 'balance_due')
       expect(order.state_changes).to be_empty
-      order.state_changed('payment')
+      Spree::Deprecation.silence do
+        order.state_changed('payment')
+      end
       expect(order.state_changes).to be_empty
     end
   end
@@ -513,45 +538,60 @@ describe Spree::Order, type: :model do
   # Regression test for https://github.com/spree/spree/issues/4199
   context "#available_payment_methods" do
     it "includes frontend payment methods" do
-      payment_method = Spree::PaymentMethod.create!({
+      payment_method = Spree::PaymentMethod::Check.create!({
         name: "Fake",
         active: true,
-        display_on: "front_end"
+        available_to_users: true,
+        available_to_admin: false
       })
       expect(order.available_payment_methods).to include(payment_method)
     end
 
     it "includes 'both' payment methods" do
-      payment_method = Spree::PaymentMethod.create!({
+      payment_method = Spree::PaymentMethod::Check.create!({
         name: "Fake",
         active: true,
-        display_on: "both"
+        available_to_users: true,
+        available_to_admin: true
       })
       expect(order.available_payment_methods).to include(payment_method)
     end
 
-    it "does not include a payment method twice if display_on is blank" do
-      payment_method = Spree::PaymentMethod.create!({
+    it "does not include a payment method twice" do
+      payment_method = Spree::PaymentMethod::Check.create!({
         name: "Fake",
         active: true,
-        display_on: "both"
+        available_to_users: true,
+        available_to_admin: true
       })
       expect(order.available_payment_methods.count).to eq(1)
       expect(order.available_payment_methods).to include(payment_method)
     end
 
+    it "does not include inactive payment methods" do
+      Spree::PaymentMethod::Check.create!({
+        name: "Fake",
+        active: false,
+        available_to_users: true,
+        available_to_admin: true
+      })
+      expect(order.available_payment_methods.count).to eq(0)
+    end
+
     context "with more than one payment method" do
       subject { order.available_payment_methods }
 
-      let!(:first_method) { FactoryGirl.create(:payment_method, display_on: :both) }
-      let!(:second_method) { FactoryGirl.create(:payment_method, display_on: :both) }
+      let!(:first_method) { FactoryGirl.create(:payment_method, available_to_users: true,
+                                               available_to_admin: true) }
+      let!(:second_method) { FactoryGirl.create(:payment_method, available_to_users: true,
+                                               available_to_admin: true) }
 
       before do
         second_method.move_to_top
       end
 
       it "respects the order of methods based on position" do
-        expect(subject).to eql([second_method, first_method])
+        expect(subject).to eq([second_method, first_method])
       end
     end
 
@@ -575,6 +615,23 @@ describe Spree::Order, type: :model do
             [payment_method_with_store]
           )
         end
+
+        context 'and the store has an extra payment method unavailable to users' do
+          let!(:admin_only_payment_method) do create(:payment_method,
+                                                     available_to_users: false,
+                                                     available_to_admin: true)
+          end
+
+          before do
+            store_with_payment_methods.payment_methods << admin_only_payment_method
+          end
+
+          it 'returns only the payment methods available to users for that store' do
+            expect(order.available_payment_methods).to match_array(
+              [payment_method_with_store]
+            )
+          end
+        end
       end
 
       context 'when the store does not have payment methods' do
@@ -589,19 +646,15 @@ describe Spree::Order, type: :model do
     end
   end
 
-  context "#apply_free_shipping_promotions" do
-    it "calls out to the FreeShipping promotion handler" do
-      shipment = double('Shipment')
-      allow(order).to receive_messages shipments: [shipment]
-      expect(Spree::PromotionHandler::FreeShipping).to receive(:new).and_return(handler = double)
-      expect(handler).to receive(:activate)
+  context "#apply_shipping_promotions" do
+    it "calls out to the Shipping promotion handler" do
+      expect_any_instance_of(Spree::PromotionHandler::Shipping).to(
+        receive(:activate)
+      ).and_call_original
 
-      expect(Spree::ItemAdjustments).to receive(:new).with(shipment).and_return(adjuster = double)
-      expect(adjuster).to receive(:update)
+      expect(order.updater).to receive(:update).and_call_original
 
-      expect(order.updater).to receive(:update_shipment_total)
-      expect(order.updater).to receive(:persist_totals)
-      order.apply_free_shipping_promotions
+      order.apply_shipping_promotions
     end
   end
 
@@ -652,39 +705,52 @@ describe Spree::Order, type: :model do
     end
   end
 
-  context "#generate_order_number" do
-    context "when no configure" do
-      let(:default_length) { Spree::Order::ORDER_NUMBER_LENGTH + Spree::Order::ORDER_NUMBER_PREFIX.length }
-      subject(:order_number) { order.generate_order_number }
+  describe "#generate_order_number" do
+    let(:order) { build(:order) }
 
-      describe '#class' do
-        subject { super().class }
-        it { is_expected.to eq String }
-      end
-
-      describe '#length' do
-        subject { super().length }
-        it { is_expected.to eq default_length }
-      end
-      it { is_expected.to match /^#{Spree::Order::ORDER_NUMBER_PREFIX}/ }
-    end
-
-    context "when length option is 5" do
-      let(:option_length) { 5 + Spree::Order::ORDER_NUMBER_PREFIX.length }
-      it "should be option length for order number" do
-        expect(order.generate_order_number(length: 5).length).to eq option_length
+    context "with default app configuration" do
+      it 'calls the default order number generator' do
+        expect_any_instance_of(Spree::Order::NumberGenerator).to receive(:generate)
+        order.generate_order_number
       end
     end
 
-    context "when letters option is true" do
-      it "generates order number include letter" do
-        expect(order.generate_order_number(length: 100, letters: true)).to match /[A-Z]/
+    context "with order number generator configured" do
+      class TruthNumberGenerator
+        def initialize(options = {}); end
+
+        def generate
+          '42'
+        end
+      end
+
+      before do
+        expect(Spree::Config).to receive(:order_number_generator) do
+          TruthNumberGenerator.new
+        end
+      end
+
+      it 'calls the configured order number generator' do
+        order.generate_order_number
+        expect(order.number).to eq '42'
       end
     end
 
-    context "when prefix option is 'P'" do
-      it "generates order number and it prefix is 'P'" do
-        expect(order.generate_order_number(prefix: 'P')).to match /^P/
+    context "with number already present" do
+      before do
+        order.number = '123'
+      end
+
+      it 'does not generate new number' do
+        order.generate_order_number
+        expect(order.number).to eq '123'
+      end
+    end
+
+    context "passing options" do
+      it 'is deprecated' do
+        expect(Spree::Deprecation).to receive(:warn)
+        order.generate_order_number(length: 2)
       end
     end
   end
@@ -742,6 +808,88 @@ describe Spree::Order, type: :model do
       expect do
         order.associate_user!(user)
       end.not_to change { address.persisted? }.from(false)
+    end
+  end
+
+  context "#assign_default_user_addresses" do
+    let(:order) { Spree::Order.new }
+
+    subject { order.assign_default_user_addresses }
+
+    context "when no user is associated to the order" do
+      it "does not associate any bill address" do
+        expect { subject }.not_to change { order.bill_address }.from(nil)
+      end
+
+      it "does not associate any ship address" do
+        expect { subject }.not_to change { order.ship_address }.from(nil)
+      end
+    end
+
+    context "when user is associated to the order" do
+      let(:user)         { build_stubbed(:user) }
+      let(:bill_address) { nil }
+      let(:ship_address) { nil }
+
+      before do
+        order.associate_user!(user)
+        user.bill_address = bill_address
+        user.ship_address = ship_address
+      end
+
+      context "but has no bill address associated" do
+        it "does not associate any bill address" do
+          expect { subject }.not_to change { order.bill_address }.from(nil)
+        end
+      end
+
+      context "and has an invalid bill address associated " do
+        let(:bill_address) { build(:address, firstname: nil) } # invalid address
+
+        it "does not associate any bill address" do
+          expect { subject }.not_to change { order.bill_address }.from(nil)
+        end
+      end
+
+      context "and has a valid address associated " do
+        let(:bill_address) { build(:address) }
+
+        it "does associate user bill address" do
+          expect { subject }.to change { order.bill_address }.from(nil).to(bill_address)
+        end
+      end
+
+      context "but has no ship address associated" do
+        it "does not associate any ship address" do
+          expect { subject }.not_to change { order.ship_address }.from(nil)
+        end
+      end
+
+      context "and has an invalid ship address associated " do
+        let(:ship_address) { build(:address, firstname: nil) } # invalid address
+
+        it "does not associate any ship address" do
+          expect { subject }.not_to change { order.ship_address }.from(nil)
+        end
+      end
+
+      context "and has a valid ship address associated" do
+        let(:ship_address) { build(:address) }
+
+        it "does associate user ship address" do
+          expect { subject }.to change { order.ship_address }.from(nil).to(ship_address)
+        end
+
+        context 'when checkout step does not include delivery' do
+          before do
+            expect(order).to receive(:checkout_steps) { %w[some step] }
+          end
+
+          it "does not associate any ship address" do
+            expect { subject }.not_to change { order.ship_address }.from(nil)
+          end
+        end
+      end
     end
   end
 
@@ -847,14 +995,14 @@ describe Spree::Order, type: :model do
     end
   end
 
-  describe "#pre_tax_item_amount" do
+  describe "#item_total_excluding_vat" do
     it "sums all of the line items' pre tax amounts" do
       subject.line_items = [
         Spree::LineItem.new(price: 10, quantity: 2, included_tax_total: 15.0),
         Spree::LineItem.new(price: 30, quantity: 1, included_tax_total: 16.0)
       ]
       # (2*10)-15 + 30-16 = 5 + 14 = 19
-      expect(subject.pre_tax_item_amount).to eq 19.0
+      expect(subject.item_total_excluding_vat).to eq 19.0
     end
   end
 
@@ -918,7 +1066,7 @@ describe Spree::Order, type: :model do
     subject(:order) { create(:order) }
     it "assigns the coordinator returned shipments to its shipments" do
       shipment = build(:shipment)
-      allow_any_instance_of(Spree::Stock::Coordinator).to receive(:shipments).and_return([shipment])
+      allow_any_instance_of(Spree::Stock::SimpleCoordinator).to receive(:shipments).and_return([shipment])
       subject.create_proposed_shipments
       expect(subject.shipments).to eq [shipment]
     end
@@ -943,25 +1091,6 @@ describe Spree::Order, type: :model do
       }.not_to change { subject.reload.shipments }
 
       expect { shipment.reload }.not_to raise_error
-    end
-
-    context "unreturned exchange" do
-      let!(:first_shipment) do
-        create(:shipment, order: subject, state: first_shipment_state, created_at: 5.days.ago)
-      end
-      let!(:second_shipment) do
-        create(:shipment, order: subject, state: second_shipment_state, created_at: 5.days.ago)
-      end
-
-      context "all shipments are shipped" do
-        let(:first_shipment_state) { "shipped" }
-        let(:second_shipment_state) { "shipped" }
-
-        it "returns the shipments" do
-          subject.create_proposed_shipments
-          expect(subject.shipments).to match_array [first_shipment, second_shipment]
-        end
-      end
     end
   end
 
@@ -992,93 +1121,6 @@ describe Spree::Order, type: :model do
       it "is false" do
         expect(subject).to eq false
       end
-    end
-  end
-
-  describe "#unreturned_exchange?" do
-    let(:order) { create(:order_with_line_items) }
-    subject { order.reload.unreturned_exchange? }
-
-    context "the order does not have a shipment" do
-      before { order.shipments.destroy_all }
-
-      it { is_expected.to be false }
-    end
-
-    context "shipment created after order" do
-      it { is_expected.to be false }
-    end
-
-    context "shipment created before order" do
-      before do
-        order.shipments.first.update_attributes!(created_at: order.created_at - 1.day)
-      end
-
-      it { is_expected.to be true }
-    end
-  end
-
-  describe '.unreturned_exchange' do
-    let(:order) { create(:order_with_line_items) }
-    subject { described_class.unreturned_exchange }
-
-    it 'includes orders that have a shipment created prior to the order' do
-      order.shipments.first.update_attributes!(created_at: order.created_at - 1.day)
-      expect(subject).to include order
-    end
-
-    it 'excludes orders that were created prior to their shipment' do
-      expect(subject).not_to include order
-    end
-
-    it 'excludes orders with no shipment' do
-      order.shipments.destroy_all
-      expect(subject).not_to include order
-    end
-  end
-
-  describe "#fully_discounted?" do
-    let(:line_item) { Spree::LineItem.new(price: 10, quantity: 1) }
-    let(:shipment) { Spree::Shipment.new(cost: 10) }
-    let(:payment) { Spree::Payment.new(amount: 10) }
-
-    around do |example|
-      Spree::Deprecation.silence do
-        example.run
-      end
-    end
-
-    before do
-      allow(order).to receive(:line_items) { [line_item] }
-      allow(order).to receive(:shipments) { [shipment] }
-      allow(order).to receive(:payments) { [payment] }
-    end
-
-    context "the order had no inventory-related cost" do
-      before do
-        # discount the cost of the line items
-        allow(order).to receive(:adjustment_total) { -5 }
-        allow(line_item).to receive(:adjustment_total) { -5 }
-
-        # but leave some shipment payment amount
-        allow(shipment).to receive(:adjustment_total) { 0 }
-      end
-
-      it { expect(order.fully_discounted?).to eq true }
-    end
-
-    context "the order had inventory-related cost" do
-      before do
-        # partially discount the cost of the line item
-        allow(order).to receive(:adjustment_total) { 0 }
-        allow(line_item).to receive(:adjustment_total) { -5 }
-
-        # and partially discount the cost of the shipment so the total
-        # discount matches the item total for test completeness
-        allow(shipment).to receive(:adjustment_total) { -5 }
-      end
-
-      it { expect(order.fully_discounted?).to eq false }
     end
   end
 
@@ -1135,12 +1177,29 @@ describe Spree::Order, type: :model do
             expect(order.payments.first.amount).to eq order_total
           end
         end
+      end
 
+      context 'there is store credit in another currency' do
+        let(:order) { create(:order_with_totals, user: user, line_items_price: order_total).tap(&:recalculate) }
+        let!(:store_credit_usd) { create(:store_credit, user: user, amount: 1, currency: 'USD') }
+        let!(:store_credit_gbp) { create(:store_credit, user: user, amount: 1, currency: 'GBP') }
+        let(:user) { create(:user) }
+
+        it 'only adds the credit in the matching currency' do
+          expect {
+            order.add_store_credit_payments
+          }.to change {
+            order.payments.count
+          }.by(1)
+
+          applied_store_credits = order.payments.store_credits.map(&:source)
+          expect(applied_store_credits).to match_array([store_credit_usd])
+        end
       end
 
       context "there is enough store credit to pay for the entire order" do
         let(:store_credit) { create(:store_credit, amount: order_total) }
-        let(:order) { create(:order_with_totals, user: store_credit.user, line_items_price: order_total).tap(&:update!) }
+        let(:order) { create(:order_with_totals, user: store_credit.user, line_items_price: order_total).tap(&:recalculate) }
 
         context "there are no other payments" do
           before do
@@ -1168,12 +1227,21 @@ describe Spree::Order, type: :model do
         let(:order_total) { 500 }
         let(:store_credit_total) { order_total - 100 }
         let(:store_credit)       { create(:store_credit, amount: store_credit_total) }
-        let(:order) { create(:order_with_totals, user: store_credit.user, line_items_price: order_total).tap(&:update!) }
+        let(:order) { create(:order_with_totals, user: store_credit.user, line_items_price: order_total).tap(&:recalculate) }
 
         context "there are no other payments" do
           it "adds an error to the model" do
             expect(subject).to be false
             expect(order.errors.full_messages).to include(Spree.t("store_credit.errors.unable_to_fund"))
+          end
+        end
+
+        context "there is a completed credit card payment" do
+          let!(:cc_payment) { create(:payment, order: order, state: "completed", amount: 100) }
+
+          it "successfully creates the store credit payments" do
+            expect { subject }.to change { order.payments.count }.from(1).to(2)
+            expect(order.errors).to be_empty
           end
         end
 
@@ -1213,7 +1281,7 @@ describe Spree::Order, type: :model do
           let(:amount_difference)       { 100 }
           let!(:primary_store_credit)   { create(:store_credit, amount: (order_total - amount_difference)) }
           let!(:secondary_store_credit) { create(:store_credit, amount: order_total, user: primary_store_credit.user, credit_type: create(:secondary_credit_type)) }
-          let(:order) { create(:order_with_totals, user: primary_store_credit.user, line_items_price: order_total).tap(&:update!) }
+          let(:order) { create(:order_with_totals, user: primary_store_credit.user, line_items_price: order_total).tap(&:recalculate) }
 
           before do
             subject
@@ -1235,65 +1303,43 @@ describe Spree::Order, type: :model do
     end
 
     describe "#covered_by_store_credit" do
-      context "order doesn't have an associated user" do
-        subject { create(:order, user: nil) }
+      subject do
+        order.covered_by_store_credit
+      end
 
-        it "returns false" do
-          expect(subject.covered_by_store_credit).to be false
-        end
+      let(:order) { create(:order_with_line_items, user: user, store: store) }
+
+      context "order doesn't have an associated user" do
+        let(:user) { nil }
+        it { is_expected.to eq(false) }
       end
 
       context "order has an associated user" do
-        let(:user) { create(:user) }
-
-        subject    { create(:order, user: user) }
-
         context "user has enough store credit to pay for the order" do
-          before do
-            allow(user).to receive_messages(total_available_store_credit: 10.0)
-            allow(subject).to receive_messages(total: 5.0)
-          end
-
-          it "returns true" do
-            expect(subject.covered_by_store_credit).to be true
-          end
+          let!(:credit) { create(:store_credit, user: user, amount: 1000) }
+          it { is_expected.to eq(true) }
         end
 
         context "user does not have enough store credit to pay for the order" do
-          before do
-            allow(user).to receive_messages(total_available_store_credit: 0.0)
-            allow(subject).to receive_messages(total: 5.0)
-          end
-
-          it "returns false" do
-            expect(subject.covered_by_store_credit).to be false
-          end
+          let!(:credit) { create(:store_credit, user: user, amount: 1) }
+          it { is_expected.to eq(false) }
         end
       end
     end
 
     describe "#total_available_store_credit" do
-      context "order does not have an associated user" do
-        subject { create(:order, user: nil) }
+      subject do
+        order.total_available_store_credit
+      end
 
-        it "returns 0" do
-          expect(subject.total_available_store_credit).to be_zero
-        end
+      context "order does not have an associated user" do
+        let(:user) { nil }
+        it { is_expected.to eq(0) }
       end
 
       context "order has an associated user" do
-        let(:user)                   { create(:user) }
-        let(:available_store_credit) { 25.0 }
-
-        subject { create(:order, user: user) }
-
-        before do
-          allow(user).to receive_messages(total_available_store_credit: available_store_credit)
-        end
-
-        it "returns the user's available store credit" do
-          expect(subject.total_available_store_credit).to eq available_store_credit
-        end
+        let!(:credit) { create(:store_credit, user: user, amount: 25) }
+        it { is_expected.to eq(25) }
       end
     end
 
@@ -1489,6 +1535,68 @@ describe Spree::Order, type: :model do
 
           expect(store_credit.amount_remaining).to eq 100
         end
+      end
+    end
+  end
+
+  context 'update_params_payment_source' do
+    subject { described_class.new }
+
+    it 'is deprecated' do
+      subject.instance_variable_set('@updating_params', {})
+      expect(Spree::Deprecation).to receive(:warn)
+      subject.update_params_payment_source
+    end
+  end
+
+  describe "#validate_payments_attributes" do
+    let(:attributes) { [ActionController::Parameters.new(payment_method_id: payment_method.id)] }
+    subject do
+      order.validate_payments_attributes(attributes)
+    end
+
+    context "with empty array" do
+      let(:attributes) { [] }
+      it "doesn't error" do
+        subject
+      end
+    end
+
+    context "with no payment method specified" do
+      let(:attributes) { [ActionController::Parameters.new({})] }
+      it "doesn't error" do
+        subject
+      end
+    end
+
+    context "with valid payment method" do
+      let(:payment_method) { create(:check_payment_method) }
+      it "doesn't error" do
+        subject
+      end
+    end
+
+    context "with inactive payment method" do
+      let(:payment_method) { create(:check_payment_method, active: false) }
+
+      it "raises RecordNotFound" do
+        expect { subject }.to raise_error(ActiveRecord::RecordNotFound)
+      end
+    end
+
+    context "with unavailable payment method" do
+      let(:payment_method) { create(:check_payment_method, available_to_users: false) }
+
+      it "raises RecordNotFound" do
+        expect { subject }.to raise_error(ActiveRecord::RecordNotFound)
+      end
+    end
+
+    context "with soft-deleted payment method" do
+      let(:payment_method) { create(:check_payment_method, deleted_at: Time.current) }
+
+      it "raises RecordNotFound" do
+        expect { subject }.to raise_error(ActiveRecord::RecordNotFound)
       end
     end
   end

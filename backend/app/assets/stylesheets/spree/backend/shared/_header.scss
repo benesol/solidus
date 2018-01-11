@@ -1,13 +1,12 @@
 .main-header {
-  @include display(flex);
-  @include align-items(center);
+  display: flex;
+  align-items: center;
   padding: 15px $grid-gutter-width;
   background-color: very-light($color-3, 4);
   border-bottom: 1px solid $color-border;
+  height: $main-header-height;
 
-  body:not(.new-layout) & {
-    margin-left: $width-sidebar;
-  }
+  @media print { display: none }
 }
 
 .page-title {
@@ -23,7 +22,7 @@
 }
 
 .header-actions {
-  @include flex-grow(1);
+  flex-grow: 1;
   text-align: right;
   line-height: 38px;
 

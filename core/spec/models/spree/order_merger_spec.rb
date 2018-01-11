@@ -1,8 +1,8 @@
-require 'spec_helper'
+require 'rails_helper'
 
 # Regression tests for https://github.com/spree/spree/issues/2179
 module Spree
-  describe OrderMerger, type: :model do
+  RSpec.describe OrderMerger, type: :model do
     let(:variant) { create(:variant) }
     let!(:store) { create(:store, default: true) }
     let(:order_1) { Spree::Order.create }
@@ -39,6 +39,26 @@ module Spree
 
         line_item = order_1.line_items.first
         expect(line_item.quantity).to eq(2)
+        expect(line_item.variant_id).to eq(variant.id)
+      end
+    end
+
+    context 'merging together two orders with multiple currencies line items' do
+      let(:order_2) { Spree::Order.create(currency: 'JPY') }
+      let(:variant_2) { create(:variant) }
+
+      before do
+        Spree::Price.create(variant: variant_2, amount: 10, currency: 'JPY')
+        order_1.contents.add(variant, 1)
+        order_2.contents.add(variant_2.reload, 1)
+      end
+
+      it 'rejects other order line items' do
+        subject.merge!(order_2, user)
+        expect(order_1.line_items.count).to eq(1)
+
+        line_item = order_1.line_items.first
+        expect(line_item.quantity).to eq(1)
         expect(line_item.variant_id).to eq(variant.id)
       end
     end
@@ -104,15 +124,17 @@ module Spree
 
       specify do
         subject.merge!(order_2)
-        line_items = order_1.line_items.reload
-        expect(line_items.count).to eq(2)
+
+        # Both in memory and in DB line items
+        expect(order_1.line_items.length).to eq(2)
+        expect(order_1.line_items.count).to eq(2)
 
         expect(order_1.item_count).to eq 2
-        expect(order_1.item_total).to eq line_items.map(&:amount).sum
+        expect(order_1.item_total).to eq order_1.line_items.map(&:amount).sum
 
         # No guarantee on ordering of line items, so we do this:
-        expect(line_items.pluck(:quantity)).to match_array([1, 1])
-        expect(line_items.pluck(:variant_id)).to match_array([variant.id, variant_2.id])
+        expect(order_1.line_items.pluck(:quantity)).to match_array([1, 1])
+        expect(order_1.line_items.pluck(:variant_id)).to match_array([variant.id, variant_2.id])
       end
     end
 
@@ -126,6 +148,7 @@ module Spree
 
       it "should create errors with invalid line items" do
         variant_2.really_destroy!
+        order_2.line_items.to_a.first.reload # so that it registers as invalid
         subject.merge!(order_2)
         expect(order_1.errors.full_messages).not_to be_empty
       end

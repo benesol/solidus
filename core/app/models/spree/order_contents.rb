@@ -30,26 +30,12 @@ module Spree
     end
 
     def remove_line_item(line_item, options = {})
-      line_item.destroy!
+      order.line_items.destroy(line_item)
       after_add_or_remove(line_item, options)
     end
 
     def update_cart(params)
-      # We need old_tax_address / new_tax_address because we can't rely on methods
-      # offered by ActiveRecord::Dirty to determine if tax_address was updated
-      # because if we update the address, a new record will be created
-      # by the Address.factory instead of the old record being updated
-
-      old_tax_address = order.tax_address
-
       if order.update_attributes(params)
-
-        new_tax_address = order.tax_address
-
-        if should_recalculate_taxes?(old_tax_address, new_tax_address)
-          order.create_tax_charge!
-        end
-
         unless order.completed?
           order.line_items = order.line_items.select { |li| li.quantity > 0 }
           # Update totals, then check if the order is eligible for any cart promotions.
@@ -84,53 +70,21 @@ module Spree
 
     private
 
-    def should_recalculate_taxes?(old_address, new_address)
-      # Related to Solidus issue #894
-      # This is needed because if you update the shipping_address
-      # from the backend on an order that completed checkout,
-      # Taxes were not being recalculated if the Order tax zone
-      # was updated
-      #
-      # Possible cases:
-      #
-      # Case 1:
-      #
-      # If old_address is a TaxLocation it means that the order has not passed
-      # the address checkout state so taxes will be computed by the Order
-      # state machine, so we do not calculate taxes here.
-      #
-      # Case 2 :
-      # If new_address is a TaxLocation, but old_address is not, it means that
-      # an order has somehow lost his TaxAddress. Since it's not supposed to happen,
-      # we do not compute taxes.
-      #
-      # Case 3
-      # Both old_address and new_address are Spree::Address so the order
-      # has completed the checkout or that a registered user has updated his
-      # default addresses. We need to recalculate the taxes.
-
-      return if old_address.is_a?(Spree::Tax::TaxLocation) || new_address.is_a?(Spree::Tax::TaxLocation)
-
-      old_address.try!(:taxation_attributes) != new_address.try!(:taxation_attributes)
-    end
-
     def after_add_or_remove(line_item, options = {})
       reload_totals
       shipment = options[:shipment]
       shipment.present? ? shipment.update_amounts : order.ensure_updated_shipments
       PromotionHandler::Cart.new(order, line_item).activate
-      ItemAdjustments.new(line_item).update
       reload_totals
       line_item
     end
 
     def order_updater
-      @updater ||= OrderUpdater.new(order)
+      @updater ||= Spree::OrderUpdater.new(order)
     end
 
     def reload_totals
       order_updater.update
-      order.reload
     end
 
     def add_to_line_item(variant, quantity, options = {})
@@ -139,11 +93,10 @@ module Spree
       line_item ||= order.line_items.new(
         quantity: 0,
         variant: variant,
-        currency: order.currency
       )
 
       line_item.quantity += quantity.to_i
-      line_item.options = ActionController::Parameters.new(options).permit(PermittedAttributes.line_item_attributes)
+      line_item.options = ActionController::Parameters.new(options).permit(PermittedAttributes.line_item_attributes).to_h
 
       if line_item.new_record?
         create_order_stock_locations(line_item, options[:stock_location_quantities])
@@ -159,8 +112,8 @@ module Spree
       line_item.quantity -= quantity
       line_item.target_shipment = options[:shipment]
 
-      if line_item.quantity == 0
-        line_item.destroy
+      if line_item.quantity <= 0
+        order.line_items.destroy(line_item)
       else
         line_item.save!
       end

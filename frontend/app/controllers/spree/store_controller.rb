@@ -3,15 +3,13 @@ module Spree
     include Spree::Core::ControllerHelpers::Pricing
     include Spree::Core::ControllerHelpers::Order
 
-    skip_before_action :set_current_order, only: :cart_link
-
     def unauthorized
       render 'spree/shared/unauthorized', layout: Spree::Config[:layout], status: 401
     end
 
     def cart_link
       render partial: 'spree/shared/link_to_cart'
-      fresh_when(simple_current_order, template: 'spree/shared/_link_to_cart')
+      fresh_when(current_order, template: 'spree/shared/_link_to_cart')
     end
 
     private
@@ -39,7 +37,7 @@ module Spree
     end
 
     def lock_order
-      OrderMutex.with_lock!(@order) { yield }
+      Spree::OrderMutex.with_lock!(@order) { yield }
     rescue Spree::OrderMutex::LockFailed
       flash[:error] = Spree.t(:order_mutex_error)
       redirect_to spree.cart_path

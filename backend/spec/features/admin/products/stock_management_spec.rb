@@ -25,8 +25,6 @@ describe "Product Stock", type: :feature do
     # It is OK to still render the stock page, ensure no errors in this case
     context "with no stock location" do
       before do
-        @product = create(:product, name: 'apache baseball cap', price: 10)
-        @product.variants.create!(sku: 'FOOBAR')
         Spree::StockLocation.destroy_all
         find_by_id('content-header').click_link('Products')
         within_row(1) do
@@ -77,7 +75,7 @@ describe "Product Stock", type: :feature do
         visit current_url
         within('.variant-stock-items', text: variant.sku) do
           fill_in "variant-count-on-hand-#{variant.id}", with: '3'
-          targetted_select2_search "Other location", from: "#s2id_variant-stock-location-#{variant.id}"
+          select "Other location", from: "stock_location_id"
           click_icon(:plus)
         end
         expect(page).to have_content('Created successfully')

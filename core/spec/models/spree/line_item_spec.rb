@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::LineItem, type: :model do
+RSpec.describe Spree::LineItem, type: :model do
   let(:order) { create :order_with_line_items, line_items_count: 1 }
   let(:line_item) { order.line_items.first }
 
@@ -26,65 +26,11 @@ describe Spree::LineItem, type: :model do
   end
 
   context "#save" do
-    context "line item changes" do
-      before do
-        line_item.quantity = line_item.quantity + 1
-      end
-
-      it "triggers adjustment total recalculation" do
-        expect(line_item).to receive(:update_tax_charge) # Regression test for https://github.com/spree/spree/issues/4671
-        expect(line_item).to receive(:recalculate_adjustments)
-        line_item.save
-      end
-    end
-
-    context "line item does not change" do
-      it "does not trigger adjustment total recalculation" do
-        expect(line_item).not_to receive(:recalculate_adjustments)
-        line_item.save
-      end
-    end
-
     context "target_shipment is provided" do
       it "verifies inventory" do
         line_item.target_shipment = Spree::Shipment.new
         expect_any_instance_of(Spree::OrderInventory).to receive(:verify)
         line_item.save
-      end
-    end
-  end
-
-  context "#create" do
-    let(:variant) { create(:variant) }
-
-    before do
-      create(:tax_rate, zone: order.tax_zone, tax_category: variant.tax_category)
-    end
-
-    context "when order has a tax zone" do
-      before do
-        expect(order.tax_zone).to be_present
-      end
-
-      it "creates a tax adjustment" do
-        order.contents.add(variant)
-        line_item = order.find_line_item_by_variant(variant)
-        expect(line_item.adjustments.tax.count).to eq(1)
-      end
-    end
-
-    context "when order does not have a tax zone" do
-      before do
-        order.bill_address = nil
-        order.ship_address = nil
-        order.save
-        expect(order.reload.tax_zone).to be_nil
-      end
-
-      it "does not create a tax adjustment" do
-        order.contents.add(variant)
-        line_item = order.find_line_item_by_variant(variant)
-        expect(line_item.adjustments.tax.count).to eq(0)
       end
     end
   end
@@ -121,7 +67,6 @@ describe Spree::LineItem, type: :model do
       before(:context) do
         Spree::LineItem.class_eval do
           def copy_price
-            self.currency = "USD"
             self.cost_price = 10
             self.price = 20
           end
@@ -148,19 +93,36 @@ describe Spree::LineItem, type: :model do
     end
   end
 
-  describe '.discounted_amount' do
+  # TODO: Remove this spec after the method has been removed.
+  describe '#discounted_amount' do
     it "returns the amount minus any discounts" do
       line_item.price = 10
       line_item.quantity = 2
       line_item.promo_total = -5
-      expect(line_item.discounted_amount).to eq(15)
+      expect(Spree::Deprecation.silence { line_item.discounted_amount }).to eq(15)
     end
   end
 
+  # TODO: Remove this spec after the method has been removed.
   describe "#discounted_money" do
     it "should return a money object with the discounted amount" do
-      expect(line_item.discounted_amount).to eq(10.00)
-      expect(line_item.discounted_money.to_s).to eq "$10.00"
+      expect(Spree::Deprecation.silence { line_item.discounted_amount }).to eq(10.00)
+      expect(Spree::Deprecation.silence { line_item.discounted_money.to_s }).to eq "$10.00"
+    end
+  end
+
+  describe '#total_before_tax' do
+    before do
+      line_item.update!(price: 10, quantity: 2)
+    end
+    let!(:admin_adjustment) { create(:adjustment, adjustable: line_item, order: line_item.order, amount: -1, source: nil) }
+    let!(:promo_adjustment) { create(:adjustment, adjustable: line_item, order: line_item.order, amount: -2, source: promo_action) }
+    let!(:ineligible_promo_adjustment) { create(:adjustment, eligible: false, adjustable: line_item, order: line_item.order, amount: -4, source: promo_action) }
+    let(:promo_action) { promo.actions[0] }
+    let(:promo) { create(:promotion, :with_line_item_adjustment) }
+
+    it 'returns the amount minus any adjustments' do
+      expect(line_item.total_before_tax).to eq(20 - 1 - 2)
     end
   end
 
@@ -182,66 +144,95 @@ describe Spree::LineItem, type: :model do
     end
   end
 
-  context 'setting the currency' do
-    let(:line_item) { order.line_items.first }
+  context 'setting a line item price' do
+    let(:store) { create(:store, default: true) }
+    let(:order) { Spree::Order.new(currency: "RUB", store: store) }
+    let(:variant) { Spree::Variant.new(product: Spree::Product.new) }
+    let(:line_item) { Spree::LineItem.new(order: order, variant: variant) }
 
-    context "currency same as order.currency" do
+    before { expect(variant).to receive(:price_for).at_least(:once).and_return(price) }
+
+    context "when a price exists in order currency" do
+      let(:price) { Spree::Money.new(99.00, currency: "RUB") }
+
       it "is a valid line item" do
-        line_item.currency = order.currency
-        line_item.valid?
-
-        expect(line_item.error_on(:currency).size).to eq(0)
+        expect(line_item.valid?).to be_truthy
+        expect(line_item.error_on(:price).size).to eq(0)
       end
     end
 
-    context "currency different than order.currency" do
-      it "is not a valid line item" do
-        expect(Spree::Deprecation).to receive(:warn).at_least(:once)
-        line_item.currency = "RUB"
-        line_item.valid?
+    context "when a price does not exist in order currency" do
+      let(:price) { nil }
 
-        expect(line_item.error_on(:currency).size).to eq(1)
+      it "is not a valid line item" do
+        expect(line_item.valid?).to be_falsey
+        expect(line_item.error_on(:price).size).to eq(1)
       end
     end
   end
 
   describe "#options=" do
-    it "can handle updating a blank line item with no order" do
-      line_item.options = { price: 123 }
-    end
+    let(:options) { { price: 123, quantity: 5 } }
 
     it "updates the data provided in the options" do
-      line_item.options = { price: 123 }
+      line_item.options = options
+
       expect(line_item.price).to eq 123
+      expect(line_item.quantity).to eq 5
     end
 
-    it "updates the price based on the options provided" do
-      expect(line_item).to receive(:gift_wrap=).with(true)
-      expect(line_item).to receive(:money_price=)
-      line_item.options = { gift_wrap: true }
+    context "when price is not provided" do
+      let(:options) { { quantity: 5 } }
+
+      it "sets price anyway, retrieving it from line item options" do
+        expect(line_item.variant)
+          .to receive(:price_for)
+          .and_return(Spree::Money.new(123, currency: "USD"))
+
+        line_item.options = options
+
+        expect(line_item.price).to eq 123
+        expect(line_item.quantity).to eq 5
+      end
     end
   end
 
   describe 'money_price=' do
-    let(:line_item) { Spree::LineItem.new }
-    let(:new_price) { Spree::Money.new(99.00, currency: "RUB") }
+    let(:currency) { "USD" }
+    let(:new_price) { Spree::Money.new(99.00, currency: currency) }
 
-    it 'assigns a new price and currency' do
+    it 'assigns a new price' do
       line_item.money_price = new_price
       expect(line_item.price).to eq(new_price.cents / 100.0)
-      expect(line_item.currency).to eq(new_price.currency.iso_code)
+    end
+
+    context 'when the new price is nil' do
+      let(:new_price) { nil }
+
+      it 'makes the line item price empty' do
+        line_item.money_price = new_price
+        expect(line_item.price).to be_nil
+      end
+    end
+
+    context 'when the price has a currency different from the order currency' do
+      let(:currency) { "RUB" }
+
+      it 'raises an exception' do
+        expect {
+          line_item.money_price = new_price
+        }.to raise_exception Spree::LineItem::CurrencyMismatch
+      end
     end
   end
 
   describe "#pricing_options" do
-    let(:line_item) { Spree::LineItem.new(currency: "RUB") }
-
     subject { line_item.pricing_options }
 
     it { is_expected.to be_a(Spree::Config.pricing_options_class) }
 
-    it "holds the line items's currency" do
-      expect(subject.currency).to eq("RUB")
+    it "holds the order currency" do
+      expect(subject.currency).to eq("USD")
     end
   end
 end

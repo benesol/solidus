@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::StoreCredit do
+RSpec.describe Spree::StoreCredit do
   let(:currency) { "TEST" }
   let(:store_credit) { build(:store_credit, store_credit_attrs) }
   let(:store_credit_attrs) { {} }
@@ -38,7 +38,7 @@ describe Spree::StoreCredit do
         allow(store_credit.category).to receive(:non_expiring?).and_return(false)
       end
 
-      it "sets the credit type to non-expiring" do
+      it "sets the credit type to expiring" do
         subject
         expect(store_credit.credit_type.name).to eq "Expiring"
       end
@@ -414,7 +414,7 @@ describe Spree::StoreCredit do
         expect(subject).to be true
       end
 
-      it "returns the capture amount to the store credit" do
+      it "returns the authorized amount to the store credit" do
         expect { subject }.to change{ store_credit.amount_authorized.to_f }.by(-authorized_amount)
       end
 
@@ -519,7 +519,7 @@ describe Spree::StoreCredit do
             @new_store_credit = Spree::StoreCredit.last
           end
 
-          it "does not set the amount used on hte originating store credit" do
+          it "does not set the amount used on the originating store credit" do
             expect(store_credit.reload.amount_used).to eq amount_used
           end
 
@@ -838,10 +838,10 @@ describe Spree::StoreCredit do
     subject { store_credit.invalidate(invalidation_reason, invalidation_user) }
 
     it "sets the invalidated_at field to the current time" do
-      invalidated_at = Time.current
+      invalidated_at = 2.minutes.from_now
       Timecop.freeze(invalidated_at) do
         subject
-        expect(store_credit.invalidated_at).to eq invalidated_at
+        expect(store_credit.invalidated_at).to be_within(1.second).of invalidated_at
       end
     end
 

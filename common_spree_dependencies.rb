@@ -5,7 +5,7 @@ source 'https://rubygems.org'
 
 platforms :ruby do
   gem 'mysql2'
-  gem 'pg'
+  gem 'pg', '~> 0.21'
   gem 'sqlite3'
   gem 'fast_sqlite'
 end
@@ -23,22 +23,25 @@ group :test do
   gem 'capybara-screenshot'
   gem 'database_cleaner', '~> 1.3'
   gem 'email_spec'
-  gem 'factory_girl_rails', '~> 4.5.0'
+  gem 'factory_girl_rails', '~> 4.8'
   gem 'launchy'
   gem 'rspec-activemodel-mocks', '~>1.0.2'
   gem 'rspec-collection_matchers'
   gem 'rspec-its'
-  gem 'rspec-rails', '~> 3.4.1'
+  gem 'rspec-rails', '~> 3.5'
   gem 'simplecov'
   gem 'poltergeist', '~> 1.9'
   gem 'timecop'
   gem 'with_model'
   gem 'rspec_junit_formatter'
+  gem 'rails-controller-testing'
+  gem 'ffaker', require: false
 end
 
 group :test, :development do
   gem 'rubocop'
   gem 'pry'
+  gem 'listen', '~> 3.1.5'
 
   platforms :mri do
     gem 'byebug'

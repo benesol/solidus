@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Order, type: :model do
+RSpec.describe Spree::Order, type: :model do
   let(:order) { stub_model("Spree::Order") }
 
   context "#finalize!" do
@@ -18,7 +18,7 @@ describe Spree::Order, type: :model do
 
     it "should sell inventory units" do
       order.shipments.each do |shipment|
-        expect(shipment).to receive(:update!)
+        expect(shipment).to receive(:update_state)
         expect(shipment).to receive(:finalize!)
       end
       order.finalize!

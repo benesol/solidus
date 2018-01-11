@@ -1,4 +1,4 @@
-require 'spec_helper'
+require 'rails_helper'
 
 RSpec.describe "Taxation system integration tests" do
   let(:order) { create :order, ship_address: shipping_address, state: "delivery" }
@@ -23,14 +23,24 @@ RSpec.describe "Taxation system integration tests" do
            tax_category: normal_category,
            shipping_category: normal_shipping_category
   end
+  let(:fruit_product) do
+    create :product,
+      price: 5,
+      name: "Food",
+      tax_category: fruit_category,
+      shipping_category: normal_shipping_category
+  end
 
   let(:book) { book_product.master }
   let(:download) { download_product.master }
   let(:sweater) { sweater_product.master }
+  let(:fruit) { fruit_product.master }
 
   let(:books_category) { create :tax_category, name: "Books" }
   let(:normal_category) { create :tax_category, name: "Normal" }
   let(:digital_category) { create :tax_category, name: "Digital Goods" }
+  let(:fruit_category) { create :tax_category, name: "Fruit Product" }
+  let(:milk_category) { create :tax_category, name: "Milk Product" }
 
   let(:books_shipping_category) { create :shipping_category, name: "Book Shipping" }
   let(:normal_shipping_category) { create :shipping_category, name: "Normal Shipping" }
@@ -42,7 +52,6 @@ RSpec.describe "Taxation system integration tests" do
 
   context 'selling from germany' do
     let(:germany) { create :country, iso: "DE" }
-    # The weird default_tax boolean is what makes this context one with default included taxes
     let!(:germany_zone) { create :zone, countries: [germany] }
     let(:romania) { create(:country, iso: "RO") }
     let(:romania_zone) { create(:zone, countries: [romania] ) }
@@ -55,7 +64,7 @@ RSpec.describe "Taxation system integration tests" do
         name: "German reduced VAT",
         included_in_price: true,
         amount: 0.07,
-        tax_category: books_category,
+        tax_categories: [books_category],
         zone: eu_zone
       )
     end
@@ -65,7 +74,7 @@ RSpec.describe "Taxation system integration tests" do
         name: "German VAT",
         included_in_price: true,
         amount: 0.19,
-        tax_category: normal_category,
+        tax_categories: [normal_category],
         zone: eu_zone
       )
     end
@@ -75,7 +84,17 @@ RSpec.describe "Taxation system integration tests" do
         name: "German VAT",
         included_in_price: true,
         amount: 0.19,
-        tax_category: digital_category,
+        tax_categories: [digital_category],
+        zone: germany_zone
+      )
+    end
+    let!(:german_food_vat) do
+      create(
+        :tax_rate,
+        name: "German Food VAT",
+        included_in_price: true,
+        amount: 0.09,
+        tax_categories: [fruit_category, milk_category],
         zone: germany_zone
       )
     end
@@ -85,7 +104,7 @@ RSpec.describe "Taxation system integration tests" do
         name: "Romanian VAT",
         included_in_price: true,
         amount: 0.24,
-        tax_category: digital_category,
+        tax_categories: [digital_category],
         zone: romania_zone
       )
     end
@@ -222,6 +241,22 @@ RSpec.describe "Taxation system integration tests" do
           expect(shipping_rate.display_price).to eq("$2.00 (incl. $0.32 German VAT)")
         end
       end
+
+      context 'an order containg a fruit' do
+        let(:variant) { fruit }
+
+        it 'still has the original price' do
+          expect(line_item.price).to eq(5)
+        end
+
+        it 'has one tax adjustment' do
+          expect(line_item.adjustments.tax.count).to eq(1)
+        end
+
+        it 'has 0.45 of included tax' do
+          expect(line_item.included_tax_total).to eq(0.41)
+        end
+      end
     end
 
     context 'to romania' do
@@ -247,7 +282,7 @@ RSpec.describe "Taxation system integration tests" do
         end
 
         it 'has a constant amount pre tax' do
-          expect(line_item.discounted_amount - line_item.included_tax_total).to eq(18.69)
+          expect(line_item.total_before_tax - line_item.included_tax_total).to eq(18.69)
         end
       end
 
@@ -285,7 +320,7 @@ RSpec.describe "Taxation system integration tests" do
         end
 
         it 'has a constant amount pre tax' do
-          expect(line_item.discounted_amount - line_item.included_tax_total).to eq(25.21)
+          expect(line_item.total_before_tax - line_item.included_tax_total).to eq(25.21)
         end
       end
 
@@ -323,7 +358,7 @@ RSpec.describe "Taxation system integration tests" do
         end
 
         it 'has a constant amount pre tax' do
-          expect(line_item.discounted_amount - line_item.included_tax_total).to eq(8.40)
+          expect(line_item.total_before_tax - line_item.included_tax_total).to eq(8.40)
         end
       end
 
@@ -345,7 +380,6 @@ RSpec.describe "Taxation system integration tests" do
         end
       end
     end
-
     # Technically, this can't be the case yet as the order won't pass the shipment stage,
     # but the taxation code shouldn't implicitly depend on the shipping code.
     context 'to an address that does not have a zone associated' do
@@ -375,7 +409,7 @@ RSpec.describe "Taxation system integration tests" do
         end
 
         it 'has a constant amount pre tax' do
-          expect(line_item.discounted_amount - line_item.included_tax_total).to eq(18.69)
+          expect(line_item.total_before_tax - line_item.included_tax_total).to eq(18.69)
         end
       end
     end
@@ -408,7 +442,7 @@ RSpec.describe "Taxation system integration tests" do
         end
 
         it 'has a constant amount pre tax' do
-          expect(line_item.discounted_amount - line_item.included_tax_total).to eq(18.69)
+          expect(line_item.total_before_tax - line_item.included_tax_total).to eq(18.69)
         end
 
         context 'an order with a book and a shipment' do
@@ -450,7 +484,7 @@ RSpec.describe "Taxation system integration tests" do
         end
 
         it 'has a constant amount pre tax' do
-          expect(line_item.discounted_amount - line_item.included_tax_total).to eq(25.21)
+          expect(line_item.total_before_tax - line_item.included_tax_total).to eq(25.21)
         end
 
         context 'an order with a sweater and a shipment' do
@@ -492,7 +526,7 @@ RSpec.describe "Taxation system integration tests" do
         end
 
         it 'has a constant amount pre tax' do
-          expect(line_item.discounted_amount - line_item.included_tax_total).to eq(8.40)
+          expect(line_item.total_before_tax - line_item.included_tax_total).to eq(8.40)
         end
       end
 
@@ -528,7 +562,7 @@ RSpec.describe "Taxation system integration tests" do
       create(
         :tax_rate,
         name: "New York Sales Tax",
-        tax_category: books_category,
+        tax_categories: [books_category],
         zone: new_york_zone,
         included_in_price: false,
         amount: 0.05
@@ -539,7 +573,7 @@ RSpec.describe "Taxation system integration tests" do
       create(
         :tax_rate,
         name: "Federal Sales Tax",
-        tax_category: books_category,
+        tax_categories: [books_category],
         zone: united_states_zone,
         included_in_price: false,
         amount: 0.10
@@ -550,7 +584,7 @@ RSpec.describe "Taxation system integration tests" do
       create(
         :tax_rate,
         name: "Federal Sales Tax",
-        tax_category: digital_category,
+        tax_categories: [digital_category],
         zone: united_states_zone,
         included_in_price: false,
         amount: 0.20
@@ -623,6 +657,25 @@ RSpec.describe "Taxation system integration tests" do
           new_york_books_tax.destroy!
           federal_books_tax.destroy!
           expect(line_item.adjustments.count).to eq(2)
+        end
+
+        context 'when tax address is later cleared' do
+          before do
+            order.ship_address = nil
+            order.recalculate
+          end
+
+          it 'removes all tax adjustments' do
+            aggregate_failures do
+              expect(line_item.adjustments.tax.count).to eq(0)
+              expect(line_item).to have_attributes(
+                price: 20,
+                total: 20,
+                included_tax_total: 0,
+                additional_tax_total: 0
+              )
+            end
+          end
         end
       end
 

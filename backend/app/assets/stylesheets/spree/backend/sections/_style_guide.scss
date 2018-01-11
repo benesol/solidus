@@ -1,9 +1,10 @@
 .style-guide {
-  @include display(flex);
+  padding-left: 0; // override regular admin layout
+  display: flex;
 
   &-sidebar {
     width: 225px;
-    background: $color-7;
+    background: $color-style-guide-nav;
     padding: 1.5rem;
 
     .brand-link {
@@ -23,10 +24,11 @@
   }
 
   &-main-content {
-    @include flex(1);
+    flex: 1;
   }
 
-  ul {
+  ul.example,
+  ul.example ul {
     list-style: none;
     padding-left: 0;
   }
@@ -39,7 +41,7 @@
       @include padding(0.75rem null);
 
       &:not(:first-of-type) {
-        border-top: 1px solid darken($color-7, 5%);
+        border-top: 1px solid $color-style-guide-nav-border;
       }
 
       > a {
@@ -50,11 +52,11 @@
 
     a {
       display: block;
-      color: darken($color-7, 65%);
+      color: $color-style-guide-nav-link;
       padding: 0.3rem 0.5rem;
 
       &:hover {
-        background: darken($color-7, 5%);
+        background: $color-style-guide-nav-link-hover;
       }
     }
   }
@@ -64,13 +66,9 @@
     margin: 4rem 0;
   }
 
-  &-section {
-    @include clearfix;
-  }
-
   &-section-header {
     @include margin(7rem 0 3rem);
-    border-bottom: 1px solid darken($color-7, 10%);
+    border-bottom: 1px solid $color-style-guide-section-border;
     font-size: 1.5rem;
     font-weight: bold;
     line-height: 0.2;
@@ -78,23 +76,23 @@
     text-transform: capitalize;
 
     span {
-      background: $color-body-bg;
+      background: $body-bg;
       @include padding(null 0.5em);
     }
 
     a {
-      color: darken($color-7, 65%);
+      color: $color-style-guide-link;
     }
   }
 
   .half {
-    width: 50%;
-    float: left;
+    display: inline-block;
+    width: 49%;
     padding-right: 1rem;
+    vertical-align: top;
 
     + .half {
-      float: none;
-      margin-left: 50%;
+      display: inline-block;
       padding-right: 0;
       padding-left: 1rem;
     }
@@ -103,30 +101,37 @@
   &-code {
     pre {
       margin: 0;
-      border: 1px solid darken($color-7, 10%);
+      border: 1px solid $color-style-guide-code;
+    }
+  }
+
+  table.with-actions-borders {
+    th, td {
+      &.actions {
+        border-right: 1px solid #cee1f4 !important;
+        border-bottom: 1px solid #cee1f4 !important;
+      }
     }
   }
 }
 
+.style-guide-code,
+.style-guide-result {
+  margin: 1rem 0;
+}
+
 .color-variables {
-  @include display(flex);
-  @include flex-wrap(wrap);
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .color-variable {
-  @include flex-shrink(0);
+  flex-shrink: 0;
   width: 240px;
   padding: 1rem;
 
   .color-swatch {
     height: 50px;
-    border: 1px solid darken($color-7, 10%);
-  }
-}
-
-.tags {
-  .state {
-    width: 33%;
-    float: left;
+    border: 1px solid $color-style-guide-swatch-border;
   }
 }

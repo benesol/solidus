@@ -1,8 +1,8 @@
 # coding: UTF-8
 
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Taxon, type: :model do
+RSpec.describe Spree::Taxon, type: :model do
   describe '#to_param' do
     let(:taxon) { FactoryGirl.build(:taxon, name: "Ruby on Rails") }
 

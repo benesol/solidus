@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::StoreCreditEvent do
+RSpec.describe Spree::StoreCreditEvent do
   describe ".exposed_events" do
     [
       Spree::StoreCredit::ELIGIBLE_ACTION,

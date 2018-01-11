@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Promotion::Actions::CreateAdjustment, type: :model do
+RSpec.describe Spree::Promotion::Actions::CreateAdjustment, type: :model do
   let(:order) { create(:order_with_line_items, line_items_count: 1) }
   let(:promotion) { create(:promotion) }
   let(:action) { Spree::Promotion::Actions::CreateAdjustment.new }
@@ -55,6 +55,26 @@ describe Spree::Promotion::Actions::CreateAdjustment, type: :model do
         }.to change { order.adjustments.count }.by(1)
         expect(order.adjustments.last.promotion_code).to eq promotion_code
       end
+    end
+  end
+
+  describe '#remove_from' do
+    let(:action) { promotion.actions.first! }
+    let(:promotion) { create(:promotion, :with_order_adjustment) }
+
+    let!(:unrelated_adjustment) { create(:adjustment, order: order, source: nil) }
+
+    before do
+      action.perform(payload)
+      @action_adjustment = order.adjustments.where(source: action).first!
+    end
+
+    it 'removes the action adjustment' do
+      expect(order.adjustments).to match_array([unrelated_adjustment, @action_adjustment])
+
+      action.remove_from(order)
+
+      expect(order.adjustments).to eq([unrelated_adjustment])
     end
   end
 

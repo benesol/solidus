@@ -10,10 +10,10 @@ feature "Tiered Calculator Promotions" do
   end
 
   scenario "adding a tiered percent calculator", js: true do
-    select2 "Create whole-order adjustment", from: "Add action of type"
+    select "Create whole-order adjustment", from: "Add action of type"
     within('#action_fields') { click_button "Add" }
 
-    select2 "Tiered Percent", from: "Calculator"
+    select "Tiered Percent", from: "Base Calculator"
     within('#actions_container') { click_button "Update" }
 
     within("#actions_container .settings") do
@@ -38,7 +38,7 @@ feature "Tiered Calculator Promotions" do
     first_action_calculator = first_action.calculator
     expect(first_action_calculator.class).to eq Spree::Calculator::TieredPercent
     expect(first_action_calculator.preferred_base_percent).to eq 5
-    expect(first_action_calculator.preferred_tiers).to eq Hash[100.0 => 10.0]
+    expect(first_action_calculator.preferred_tiers).to eq(BigDecimal(100) => BigDecimal(10))
   end
 
   context "with an existing tiered flat rate calculator" do
@@ -49,7 +49,7 @@ feature "Tiered Calculator Promotions" do
 
       action.calculator = Spree::Calculator::TieredFlatRate.new
       action.calculator.preferred_base_amount = 5
-      action.calculator.preferred_tiers = Hash[100 => 10, 200 => 15, 300 => 20]
+      action.calculator.preferred_tiers = {100 => 10, 200 => 15, 300 => 20}
       action.calculator.save!
 
       visit spree.edit_admin_promotion_path(promotion)
@@ -63,7 +63,10 @@ feature "Tiered Calculator Promotions" do
       within('#actions_container') { click_button "Update" }
 
       calculator = promotion.actions.first.calculator
-      expect(calculator.preferred_tiers).to eq Hash[100.0 => 10.0, 300.0 => 20.0]
+      expect(calculator.preferred_tiers).to eq({
+        BigDecimal(100) => 10,
+        BigDecimal(300) => 20
+      })
     end
   end
 end

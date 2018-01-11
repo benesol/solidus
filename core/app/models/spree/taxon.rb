@@ -1,3 +1,5 @@
+require 'spree/core/product_filters'
+
 module Spree
   class Taxon < Spree::Base
     acts_as_nested_set dependent: :destroy
@@ -6,15 +8,12 @@ module Spree
     has_many :classifications, -> { order(:position) }, dependent: :delete_all, inverse_of: :taxon
     has_many :products, through: :classifications
 
-    has_many :prototype_taxons, dependent: :destroy
-    has_many :prototypes, through: :prototype_taxons
-
     has_many :promotion_rule_taxons
     has_many :promotion_rules, through: :promotion_rule_taxons
 
     before_create :set_permalink
     before_update :set_permalink
-    after_update :update_child_permalinks, if: :permalink_changed?
+    after_update :update_child_permalinks, if: :saved_change_to_permalink?
 
     validates :name, presence: true
     validates :meta_keywords, length: { maximum: 255 }

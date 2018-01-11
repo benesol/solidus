@@ -13,7 +13,7 @@ module Spree
       describe '#create' do
         context "with a valid credit card" do
           let(:order) { create(:order_with_line_items, state: "payment") }
-          let(:payment_method) { create(:credit_card_payment_method, display_on: "back_end") }
+          let(:payment_method) { create(:credit_card_payment_method, available_to_admin: true, available_to_users: false) }
           let(:attributes) do
             {
               order_id: order.number,
@@ -32,7 +32,7 @@ module Spree
           end
 
           before do
-            post :create, attributes
+            post :create, params: attributes
           end
 
           it "should process payment correctly" do
@@ -54,7 +54,6 @@ module Spree
             let(:address_attributes) do
               {
                 'firstname' => address.firstname,
-                'lastname' => address.lastname,
                 'address1' => address.address1,
                 'city' => address.city,
                 'country_id' => address.country_id,
@@ -76,14 +75,28 @@ module Spree
       describe '#new' do
         # Regression test for https://github.com/spree/spree/issues/3233
         context "with a backend payment method" do
-          before do
-            @payment_method = create(:check_payment_method, display_on: "back_end")
+          context "and the payment method is active" do
+            before do
+              @payment_method = create(:check_payment_method, available_to_admin: true)
+            end
+
+            it "loads the payment method" do
+              get :new, params: { order_id: order.number }
+              expect(response.status).to eq(200)
+              expect(assigns[:payment_methods]).to include(@payment_method)
+            end
           end
 
-          it "loads backend payment methods" do
-            get :new, order_id: order.number
-            expect(response.status).to eq(200)
-            expect(assigns[:payment_methods]).to include(@payment_method)
+          context "and the payment method is inactive" do
+            before do
+              @payment_method = create(:check_payment_method, available_to_admin: true, active: false)
+            end
+
+            it "does not load the payment method" do
+              get :new, params: { order_id: order.number }
+              expect(response.status).to eq(200)
+              expect(assigns[:payment_methods]).to be_empty
+            end
           end
         end
       end
@@ -97,7 +110,7 @@ module Spree
 
           context "order does not have payments" do
             it "redirect to new payments page" do
-              get :index, { amount: 100, order_id: order.number }
+              get :index, params: { amount: 100, order_id: order.number }
               expect(response).to redirect_to(spree.new_admin_order_payment_path(order))
             end
           end
@@ -108,7 +121,7 @@ module Spree
             end
 
             it "shows the payments page" do
-              get :index, { amount: 100, order_id: order.number }
+              get :index, params: { amount: 100, order_id: order.number }
               expect(response.code).to eq "200"
             end
           end
@@ -121,7 +134,7 @@ module Spree
           end
 
           it "should redirect to the customer details page" do
-            get :index, { amount: 100, order_id: order.number }
+            get :index, params: { amount: 100, order_id: order.number }
             expect(response).to redirect_to(spree.edit_admin_order_customer_path(order))
           end
         end
@@ -147,7 +160,7 @@ module Spree
 
             it 'allows the action' do
               expect {
-                post(:fire, id: payment.to_param, e: 'capture', order_id: order.to_param)
+                post(:fire, params: { id: payment.to_param, e: 'capture', order_id: order.to_param })
               }.to change { payment.reload.state }.from('checkout').to('completed')
             end
 
@@ -166,7 +179,7 @@ module Spree
 
               it 'does not allow the action' do
                 expect {
-                  post(:fire, id: payment.to_param, e: 'capture', order_id: order.to_param)
+                  post(:fire, params: { id: payment.to_param, e: 'capture', order_id: order.to_param })
                 }.to_not change { payment.reload.state }
                 expect(flash[:error]).to eq('Authorization Failure')
               end

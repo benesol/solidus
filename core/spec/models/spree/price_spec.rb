@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Price, type: :model do
+RSpec.describe Spree::Price, type: :model do
   describe 'searchable columns' do
     subject { described_class.whitelisted_ransackable_attributes }
     it 'allows searching by variant_id' do
@@ -55,6 +55,12 @@ describe Spree::Price, type: :model do
         it { is_expected.to be_valid }
       end
 
+      context 'when country iso is an empty string' do
+        let(:country_iso) { "" }
+
+        it { is_expected.to be_valid }
+      end
+
       context 'when country iso is a country code' do
         let!(:country) { create(:country, iso: "DE") }
         let(:country_iso) { "DE" }
@@ -69,9 +75,18 @@ describe Spree::Price, type: :model do
       end
     end
 
+    describe "country_iso=" do
+      let(:price) { Spree::Price.new(country_iso: "de") }
+
+      it "assigns nil if passed nil" do
+        price.country_iso = nil
+        expect(price.country_iso).to be_nil
+      end
+    end
+
     describe '#country' do
       let!(:country) { create(:country, iso: "DE") }
-      let(:price) { create(:price, country_iso: "DE", is_default: false) }
+      let(:price) { create(:price, country_iso: "DE") }
 
       it 'returns the country object' do
         expect(price.country).to eq(country)
@@ -118,7 +133,7 @@ describe Spree::Price, type: :model do
   describe 'net_amount' do
     let(:country) { create(:country, iso: "DE") }
     let(:zone) { create(:zone, countries: [country]) }
-    let!(:tax_rate) { create(:tax_rate, included_in_price: true, zone: zone, tax_category: variant.tax_category) }
+    let!(:tax_rate) { create(:tax_rate, included_in_price: true, zone: zone, tax_categories: [variant.tax_category]) }
 
     let(:variant) { create(:product).master }
 
@@ -126,6 +141,6 @@ describe Spree::Price, type: :model do
 
     subject { price.net_amount }
 
-    it { is_expected.to eq(BigDecimal.new(20) / 1.1) }
+    it { is_expected.to eq(BigDecimal(20) / 1.1) }
   end
 end

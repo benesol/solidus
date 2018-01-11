@@ -25,18 +25,20 @@
     <thead>
       <tr data-hook="named_types_header">
         <th><%= Spree.t(:name) %></th>
-        <th><%= Spree.t(:active) %></th>
+        <th><%= Spree.t(:state) %></th>
         <th class="actions"></th>
       </tr>
     </thead>
     <tbody>
       <% @collection.each do |named_type| %>
-        <tr id="<%= spree_dom_id named_type %>" data-hook="named_type_row" class="<%= cycle('odd', 'even')%>">
-          <td class="align-center">
+        <tr id="<%= spree_dom_id named_type %>" data-hook="named_type_row">
+          <td>
             <%= named_type.name %>
           </td>
-          <td class="align-center">
-            <%= Spree.t(named_type.active? ? :say_yes : :say_no) %>
+          <td>
+            <span class="pill pill-<%= named_type.active? ? 'active' : 'inactive' %>">
+              <%= Spree.t(named_type.active? ? :active : :inactive) %>
+            </span>
           </td>
           <td class="actions">
             <% if named_type.mutable? && can?(:update, named_type) %>
@@ -48,7 +50,7 @@
     </tbody>
   </table>
 <% else %>
-  <div class="alpha twelve columns no-objects-found">
+  <div class="col-9 no-objects-found">
     <%= render 'spree/admin/shared/no_objects_found',
                  resource: resource,
                  new_resource_url: new_object_url %>

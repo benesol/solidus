@@ -3,8 +3,9 @@
 variantTemplate = HandlebarsTemplates["variants/autocomplete"]
 
 formatVariantResult = (variant) ->
-  variant.image = variant.images[0].mini_url  if variant["images"][0] isnt `undefined` and variant["images"][0].mini_url isnt `undefined`
-  variantTemplate variant: variant
+  variantTemplate(
+    variant: variant
+  )
 
 $.fn.variantAutocomplete = (searchOptions = {}) ->
   @select2
@@ -32,7 +33,7 @@ $.fn.variantAutocomplete = (searchOptions = {}) ->
 
     formatResult: formatVariantResult
     formatSelection: (variant, container, escapeMarkup) ->
-      if !!variant.options_text
-        Select2.util.escapeMarkup("#{variant.name} (#{variant.options_text}")
+      if variant.options_text
+        Select2.util.escapeMarkup("#{variant.name} (#{variant.options_text})")
       else
         Select2.util.escapeMarkup(variant.name)

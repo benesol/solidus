@@ -4,7 +4,7 @@ require 'spree/core/version'
 
 module Spree
   class DummyGenerator < Rails::Generators::Base
-    desc "Creates blank Rails application, installs Spree and all sample data"
+    desc "Creates blank Rails application, installs Solidus and all sample data"
 
     class_option :lib_name, default: ''
     class_option :database, default: ''
@@ -30,7 +30,15 @@ module Spree
       opts[:database] = 'sqlite3' if opts[:database].blank?
       opts[:force] = true
       opts[:skip_bundle] = true
-      opts[:old_style_hash] = true
+      opts[:skip_gemfile] = true
+      opts[:skip_git] = true
+      opts[:skip_keeps] = true
+      opts[:skip_listen] = true
+      opts[:skip_puma] = true
+      opts[:skip_rc] = true
+      opts[:skip_spring] = true
+      opts[:skip_test] = true
+      opts[:skip_yarn] = true
 
       puts "Generating dummy Rails application..."
       invoke Rails::Generators::AppGenerator,
@@ -47,7 +55,6 @@ module Spree
       template "rails/routes.rb", "#{dummy_path}/config/routes.rb", force: true
       template "rails/test.rb", "#{dummy_path}/config/environments/test.rb", force: true
       template "rails/script/rails", "#{dummy_path}/spec/dummy/script/rails", force: true
-      template "initializers/custom_user.rb", "#{dummy_path}/config/initializers/custom_user.rb", force: true
     end
 
     def test_dummy_inject_extension_requirements

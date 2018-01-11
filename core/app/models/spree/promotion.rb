@@ -7,10 +7,10 @@ module Spree
 
     belongs_to :promotion_category
 
-    has_many :promotion_rules, autosave: true, dependent: :destroy
+    has_many :promotion_rules, autosave: true, dependent: :destroy, inverse_of: :promotion
     alias_method :rules, :promotion_rules
 
-    has_many :promotion_actions, autosave: true, dependent: :destroy
+    has_many :promotion_actions, autosave: true, dependent: :destroy, inverse_of: :promotion
     alias_method :actions, :promotion_actions
 
     has_many :order_promotions, class_name: "Spree::OrderPromotion"
@@ -18,6 +18,8 @@ module Spree
 
     has_many :codes, class_name: "Spree::PromotionCode", inverse_of: :promotion, dependent: :destroy
     alias_method :promotion_codes, :codes
+
+    has_many :promotion_code_batches, class_name: "Spree::PromotionCodeBatch", dependent: :destroy
 
     accepts_nested_attributes_for :promotion_actions, :promotion_rules
 
@@ -82,15 +84,6 @@ module Spree
       !active?
     end
 
-    def expired?
-      Spree::Deprecation.warn <<-WARN.squish, caller
-        #expired? is deprecated, and will be removed in Solidus 2.0.
-        Please use #inactive? instead.
-      WARN
-
-      inactive?
-    end
-
     def activate(order:, line_item: nil, user: nil, path: nil, promotion_code: nil)
       return unless self.class.order_activatable?(order)
 
@@ -114,16 +107,19 @@ module Spree
 
       if action_taken
         # connect to the order
-        order_promotions.find_or_create_by!(
-          order_id: order.id,
-          promotion_code_id: promotion_code.try!(:id)
+        order.order_promotions.find_or_create_by!(
+          promotion: self,
+          promotion_code: promotion_code,
         )
+        order.promotions.reset
+        order_promotions.reset
+        orders.reset
       end
 
       action_taken
     end
 
-    # called anytime order.update! happens
+    # called anytime order.recalculate happens
     def eligible?(promotable, promotion_code: nil)
       return false if inactive?
       return false if usage_limit_exceeded?
@@ -218,6 +214,20 @@ module Spree
           id: excluded_orders.map(&:id)
         ).any?
       end
+    end
+
+    # Removes a promotion and any adjustments or other side effects from an
+    # order.
+    # @param order [Spree::Order] the order to remove the promotion from.
+    # @return [void]
+    def remove_from(order)
+      actions.each do |action|
+        action.remove_from(order)
+      end
+      # note: this destroys the join table entry, not the promotion itself
+      order.promotions.destroy(self)
+      order.order_promotions.reset
+      order_promotions.reset
     end
 
     private

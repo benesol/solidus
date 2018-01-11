@@ -1,4 +1,4 @@
-require 'spec_helper'
+require 'rails_helper'
 
 RSpec.describe Spree::Core::StockConfiguration do
   describe '#coordinator_class' do
@@ -6,7 +6,7 @@ RSpec.describe Spree::Core::StockConfiguration do
     subject { stock_configuration.coordinator_class }
 
     it "returns Spree::Stock::Coordinator" do
-      is_expected.to be ::Spree::Stock::Coordinator
+      is_expected.to be ::Spree::Stock::SimpleCoordinator
     end
 
     context "with another constant name assiged" do

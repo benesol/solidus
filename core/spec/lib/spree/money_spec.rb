@@ -1,7 +1,9 @@
 # coding: utf-8
-require 'spec_helper'
 
-describe Spree::Money do
+require 'spec_helper'
+require 'spree/money'
+
+RSpec.describe Spree::Money do
   before do
     configure_spree_preferences do |config|
       config.currency = "USD"
@@ -77,7 +79,7 @@ describe Spree::Money do
       end
 
       context 'with BigDecimal' do
-        let(:amount){ BigDecimal.new('10.00') }
+        let(:amount){ BigDecimal('10.00') }
         it { should == "$10.00 USD" }
       end
     end
@@ -265,6 +267,38 @@ describe Spree::Money do
 
       it 'raises a TypeError' do
         expect { money_1 == money_2 }.to raise_error(TypeError)
+      end
+    end
+  end
+
+  it "includes Comparable" do
+    expect(described_class).to include(Comparable)
+  end
+
+  describe "<=>" do
+    let(:usd_10) { Spree::Money.new(10, currency: "USD") }
+    let(:usd_20) { Spree::Money.new(20, currency: "USD") }
+    let(:usd_30) { Spree::Money.new(30, currency: "USD") }
+
+    it "compares the two amounts" do
+      expect(usd_20 <=> usd_20).to eq 0
+      expect(usd_20 <=> usd_10).to be > 0
+      expect(usd_20 <=> usd_30).to be < 0
+    end
+
+    context "with a non Spree::Money object" do
+      it "raises an error" do
+        expect { usd_10 <=> 20 }.to raise_error(TypeError)
+      end
+    end
+
+    context "with differing currencies" do
+      let(:cad) { Spree::Money.new(10, currency: "CAD") }
+
+      it "raises an error" do
+        expect { usd_10 <=> cad }.to raise_error(
+          Spree::Money::DifferentCurrencyError
+        )
       end
     end
   end

@@ -1,9 +1,18 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::InventoryUnit, type: :model do
+RSpec.describe Spree::InventoryUnit, type: :model do
   let(:stock_location) { create(:stock_location_with_items) }
   let(:stock_item) { stock_location.stock_items.order(:id).first }
   let(:line_item) { create(:line_item, variant: stock_item.variant) }
+
+  describe ".cancelable" do
+    let!(:pending_unit) { create(:inventory_unit, pending: true) }
+    let!(:non_pending_unit) { create(:inventory_unit, pending: false) }
+
+    subject { described_class.cancelable }
+
+    it { is_expected.to contain_exactly(non_pending_unit) }
+  end
 
   context "#backordered_for_stock_item" do
     let(:order) do
@@ -141,7 +150,7 @@ describe Spree::InventoryUnit, type: :model do
   end
 
   describe "#current_or_new_return_item" do
-    before { allow(inventory_unit).to receive_messages(pre_tax_amount: 100.0) }
+    before { allow(inventory_unit).to receive_messages(total_excluding_vat: 100.0) }
 
     subject { inventory_unit.current_or_new_return_item }
 
@@ -289,11 +298,10 @@ describe Spree::InventoryUnit, type: :model do
       expect { inventory_unit.reload }.not_to raise_error
     end
 
-    it "cannot be destroyed if its shipment is ready" do
+    it "can be destroyed if its shipment is ready" do
       inventory_unit = create(:order_ready_to_ship).inventory_units.first
-      expect(inventory_unit.destroy).to eq false
-      expect(inventory_unit.errors.full_messages.join).to match /Cannot destroy/
-      expect { inventory_unit.reload }.not_to raise_error
+      expect(inventory_unit.destroy).to be_truthy
+      expect { inventory_unit.reload }.to raise_error(ActiveRecord::RecordNotFound)
     end
 
     it "cannot be destroyed if its shipment is shipped" do

@@ -75,15 +75,149 @@ describe "Checkout", type: :feature, inaccessible: true do
     end
   end
 
+  context "displays default user addresses on address step" do
+    before do
+      stock_location.stock_items.update_all(count_on_hand: 1)
+    end
+
+    context "when user is logged in" do
+      let!(:user) do
+        create(:user, bill_address: saved_bill_address, ship_address: saved_ship_address)
+      end
+
+      let!(:order) do
+        order = Spree::Order.create!(
+          email: "spree@example.com",
+          store: Spree::Store.first || FactoryGirl.create(:store)
+        )
+
+        order.reload
+        order.user = user
+        order.recalculate
+        order
+      end
+
+      before do
+        allow_any_instance_of(Spree::CheckoutController).to receive_messages(current_order: order)
+        allow_any_instance_of(Spree::CheckoutController).to receive_messages(try_spree_current_user: user)
+        allow_any_instance_of(Spree::OrdersController).to receive_messages(try_spree_current_user: user)
+
+        add_mug_to_cart
+        click_button "Checkout"
+        # We need an order reload here to get newly associated addresses.
+        # Then we go back to address where we are supposed to be redirected.
+        order.reload
+        visit spree.checkout_state_path(:address)
+      end
+
+      context "when user has default addresses saved" do
+        let(:saved_bill_address) { create(:address, firstname: 'Bill') }
+        let(:saved_ship_address) { create(:address, firstname: 'Steve') }
+
+        it "shows the saved addresses" do
+          within("#billing") do
+            expect(find_field('First Name').value).to eq 'Bill'
+          end
+
+          within("#shipping") do
+            expect(find_field('First Name').value).to eq 'Steve'
+          end
+        end
+      end
+
+      context "when user does not have default addresses saved" do
+        let(:saved_bill_address) { nil }
+        let(:saved_ship_address) { nil }
+
+        it 'shows an empty address' do
+          within("#billing") do
+            expect(find_field('First Name').value).to be_nil
+          end
+
+          within("#shipping") do
+            expect(find_field('First Name').value).to be_nil
+          end
+        end
+      end
+    end
+
+    context "when user is not logged in" do
+      context "and proceeds with guest checkout" do
+        it 'shows empty addresses' do
+          add_mug_to_cart
+          click_button "Checkout"
+
+          within("#billing") do
+            expect(find_field('First Name').value).to be_nil
+          end
+
+          within("#shipping") do
+            expect(find_field('First Name').value).to be_nil
+          end
+        end
+      end
+
+      context "and proceeds logging in" do
+        let!(:user) do
+          create(:user, bill_address: saved_bill_address, ship_address: saved_ship_address)
+        end
+
+        before do
+          add_mug_to_cart
+          click_button "Checkout"
+
+          # Simulate user login
+          Spree::Order.last.associate_user!(user)
+          allow_any_instance_of(Spree::CheckoutController).to receive_messages(try_spree_current_user: user)
+          allow_any_instance_of(Spree::OrdersController).to receive_messages(try_spree_current_user: user)
+
+          # Simulate redirect back to address after login
+          visit spree.checkout_state_path(:address)
+        end
+
+        context "when does not have saved addresses" do
+          let(:saved_bill_address) { nil }
+          let(:saved_ship_address) { nil }
+
+          it 'shows empty addresses' do
+            within("#billing") do
+              expect(find_field('First Name').value).to be_nil
+            end
+
+            within("#shipping") do
+              expect(find_field('First Name').value).to be_nil
+            end
+          end
+        end
+
+        # Regression test for https://github.com/solidusio/solidus/issues/1811
+        context "when does have saved addresses" do
+          let(:saved_bill_address) { create(:address, firstname: 'Bill') }
+          let(:saved_ship_address) { create(:address, firstname: 'Steve') }
+
+          it 'shows empty addresses' do
+            within("#billing") do
+              expect(find_field('First Name').value).to eq 'Bill'
+            end
+
+            within("#shipping") do
+              expect(find_field('First Name').value).to eq 'Steve'
+            end
+          end
+        end
+      end
+    end
+  end
+
   # Regression test for https://github.com/spree/spree/issues/2694 and https://github.com/spree/spree/issues/4117
   context "doesn't allow bad credit card numbers" do
+    let!(:payment_method) { create(:credit_card_payment_method) }
     before(:each) do
       order = OrderWalkthrough.up_to(:delivery)
-      allow(order).to receive_messages(available_payment_methods: [create(:credit_card_payment_method)])
 
       user = create(:user)
       order.user = user
-      order.update!
+      order.recalculate
 
       allow_any_instance_of(Spree::CheckoutController).to receive_messages(current_order: order)
       allow_any_instance_of(Spree::CheckoutController).to receive_messages(try_spree_current_user: user)
@@ -111,7 +245,7 @@ describe "Checkout", type: :feature, inaccessible: true do
 
       order.reload
       order.user = user
-      order.update!
+      order.recalculate
       order
     end
 
@@ -158,7 +292,7 @@ describe "Checkout", type: :feature, inaccessible: true do
       order = OrderWalkthrough.up_to(:delivery)
       allow(order).to receive_messages(available_payment_methods: [check_payment, credit_cart_payment])
       order.user = create(:user)
-      order.update!
+      order.recalculate
 
       allow_any_instance_of(Spree::CheckoutController).to receive_messages(current_order: order)
       allow_any_instance_of(Spree::CheckoutController).to receive_messages(try_spree_current_user: order.user)
@@ -180,7 +314,8 @@ describe "Checkout", type: :feature, inaccessible: true do
   end
 
   context "user has payment sources", js: true do
-    let(:bogus) { create(:credit_card_payment_method) }
+    before { Spree::PaymentMethod.all.each(&:really_destroy!) }
+    let!(:bogus) { create(:credit_card_payment_method) }
     let(:user) { create(:user) }
 
     let!(:credit_card) do
@@ -188,8 +323,8 @@ describe "Checkout", type: :feature, inaccessible: true do
     end
 
     before do
+      user.wallet.add(credit_card)
       order = OrderWalkthrough.up_to(:delivery)
-      allow(order).to receive_messages(available_payment_methods: [bogus])
 
       allow_any_instance_of(Spree::CheckoutController).to receive_messages(current_order: order)
       allow_any_instance_of(Spree::CheckoutController).to receive_messages(try_spree_current_user: user)
@@ -489,6 +624,47 @@ describe "Checkout", type: :feature, inaccessible: true do
       let(:xss_string) { '\x27\x3e\x3cscript\x3ethrow(\x27XSS\x27)\x3c/script\x3e' }
       include_examples "safe from XSS"
     end
+  end
+
+  context "using credit card" do
+    let!(:payment_method) { create(:credit_card_payment_method) }
+
+    # Regression test for https://github.com/solidusio/solidus/issues/1421
+    it "works with card number 1", js: true do
+      add_mug_to_cart
+
+      click_on "Checkout"
+      fill_in "order_email", with: "test@example.com"
+      fill_in_address
+      click_on "Save and Continue"
+      click_on "Save and Continue"
+
+      fill_in_credit_card(number: "1")
+      click_on "Save and Continue"
+
+      expect(page).to have_current_path("/checkout/confirm")
+    end
+
+    it "works with card number 4111111111111111", js: true do
+      add_mug_to_cart
+
+      click_on "Checkout"
+      fill_in "order_email", with: "test@example.com"
+      fill_in_address
+      click_on "Save and Continue"
+      click_on "Save and Continue"
+
+      fill_in_credit_card(number: "4111111111111111")
+      click_on "Save and Continue"
+
+      expect(page).to have_current_path("/checkout/confirm")
+    end
+  end
+
+  def fill_in_credit_card(number:)
+    fill_in "Card Number", with: number
+    fill_in "Expiration", with: "1224"
+    fill_in "Card Code", with: "123"
   end
 
   def fill_in_address

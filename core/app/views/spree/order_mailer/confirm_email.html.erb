@@ -15,8 +15,8 @@
           <tr>
             <td><%= item.variant.sku %></td>
             <td>
-              <%= raw(item.variant.product.name) %>
-              <%= raw(item.variant.options_text) -%>
+              <%= item.variant.product.name %>
+              <%= item.variant.options_text -%>
             </td>
             <td>(<%=item.quantity%>) @ <%= item.single_money %> = <%= item.display_amount %></td>
           </tr>
@@ -45,7 +45,7 @@
           <tr>
             <td></td>
             <td><%= Spree.t(:shipping) %> <%= name %>:</td>
-            <td><%= Spree::Money.new(shipments.sum(&:discounted_cost), currency: @order.currency) %></td>
+            <td><%= Spree::Money.new(shipments.sum(&:total_before_tax), currency: @order.currency) %></td>
           </tr>
         <% end %>
         <% if @order.all_adjustments.eligible.tax.exists? %>

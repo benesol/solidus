@@ -9,11 +9,6 @@ describe Spree::Admin::OrdersController, type: :controller do
 
     before do
       request.env["HTTP_REFERER"] = "http://localhost:3000"
-
-      # ensure no respond_overrides are in effect
-      if Spree::BaseController.spree_responders[:OrdersController].present?
-        Spree::BaseController.spree_responders[:OrdersController].clear
-      end
     end
 
     let(:order) do
@@ -30,14 +25,14 @@ describe Spree::Admin::OrdersController, type: :controller do
     let(:adjustments) { double('adjustments') }
 
     before do
-      allow(Spree::Order).to receive_messages(find_by_number!: order)
+      allow(Spree::Order).to receive_message_chain(:includes, find_by!: order)
       allow(order).to receive_messages(contents: Spree::OrderContents.new(order))
     end
 
     context "#approve" do
       it "approves an order" do
         expect(order.contents).to receive(:approve).with(user: controller.try_spree_current_user)
-        put :approve, id: order.number
+        put :approve, params: { id: order.number }
         expect(flash[:success]).to eq Spree.t(:order_approved)
       end
     end
@@ -45,7 +40,7 @@ describe Spree::Admin::OrdersController, type: :controller do
     context "#cancel" do
       it "cancels an order" do
         expect(order).to receive(:canceled_by).with(controller.try_spree_current_user)
-        put :cancel, id: order.number
+        put :cancel, params: { id: order.number }
         expect(flash[:success]).to eq Spree.t(:order_canceled)
       end
     end
@@ -53,14 +48,25 @@ describe Spree::Admin::OrdersController, type: :controller do
     context "#resume" do
       it "resumes an order" do
         expect(order).to receive(:resume!)
-        put :resume, id: order.number
+        put :resume, params: { id: order.number }
         expect(flash[:success]).to eq Spree.t(:order_resumed)
+      end
+    end
+
+    context "#resend" do
+      let(:order) { create(:completed_order_with_totals) }
+      it "resends order email" do
+        mail_message = double "Mail::Message"
+        expect(Spree::OrderMailer).to receive(:confirm_email).with(order, true).and_return mail_message
+        expect(mail_message).to receive :deliver_later
+        post :resend, params: { id: order.number }
+        expect(flash[:success]).to eq Spree.t(:order_email_resent)
       end
     end
 
     context "pagination" do
       it "can page through the orders" do
-        get :index, page: 2, per_page: 10
+        get :index, params: { page: 2, per_page: 10 }
         expect(assigns[:orders].offset_value).to eq(10)
         expect(assigns[:orders].limit_value).to eq(10)
       end
@@ -91,18 +97,18 @@ describe Spree::Admin::OrdersController, type: :controller do
         expect(Spree::Core::Importer::Order).to receive(:import)
           .with(user, hash_including(store_id: controller.current_store.id))
           .and_return(order)
-        get :new, { user_id: user.id }
+        get :new, params: { user_id: user.id }
       end
 
       context "when a user_id is passed as a parameter" do
         let(:user)  { mock_model(Spree.user_class) }
-        before { allow(Spree.user_class).to receive_messages find_by_id: user }
+        before { allow(Spree.user_class).to receive_messages find_by: user }
 
         it "imports a new order and assigns the user to the order" do
           expect(Spree::Core::Importer::Order).to receive(:import)
             .with(user, hash_including(created_by_id: controller.try_spree_current_user.id))
             .and_return(order)
-          get :new, { user_id: user.id }
+          get :new, params: { user_id: user.id }
         end
       end
 
@@ -113,17 +119,18 @@ describe Spree::Admin::OrdersController, type: :controller do
     end
 
     # Regression test for https://github.com/spree/spree/issues/3684
+    # Rendering a form should under no circumstance mutate the order
     context "#edit" do
       it "does not refresh rates if the order is completed" do
         allow(order).to receive_messages completed?: true
         expect(order).not_to receive :refresh_shipment_rates
-        get :edit, id: order.number
+        get :edit, params: { id: order.number }
       end
 
-      it "does refresh the rates if the order is incomplete" do
+      it "does not refresh the rates if the order is incomplete" do
         allow(order).to receive_messages completed?: false
-        expect(order).to receive :refresh_shipment_rates
-        get :edit, id: order.number
+        expect(order).not_to receive :refresh_shipment_rates
+        get :edit, params: { id: order.number }
       end
 
       context "when order does not have a ship address" do
@@ -135,7 +142,7 @@ describe Spree::Admin::OrdersController, type: :controller do
           before { Spree::Config[:order_bill_address_used] = true }
 
           it "should redirect to the customer details page" do
-            get :edit, id: order.number
+            get :edit, params: { id: order.number }
             expect(response).to redirect_to(spree.edit_admin_order_customer_path(order))
           end
         end
@@ -144,7 +151,7 @@ describe Spree::Admin::OrdersController, type: :controller do
           before { Spree::Config[:order_bill_address_used] = false }
 
           it "should redirect to the customer details page" do
-            get :edit, id: order.number
+            get :edit, params: { id: order.number }
             expect(response).to redirect_to(spree.edit_admin_order_customer_path(order))
           end
         end
@@ -153,7 +160,7 @@ describe Spree::Admin::OrdersController, type: :controller do
 
     describe '#advance' do
       subject do
-        put :advance, id: order.number
+        put :advance, params: { id: order.number }
       end
 
       context 'when incomplete' do
@@ -163,7 +170,7 @@ describe Spree::Admin::OrdersController, type: :controller do
         end
 
         context 'when successful' do
-          before { allow(order).to receive(:confirm?).and_return(true) }
+          before { allow(order).to receive(:can_complete?).and_return(true) }
 
           it 'messages and redirects' do
             subject
@@ -174,7 +181,7 @@ describe Spree::Admin::OrdersController, type: :controller do
 
         context 'when unsuccessful' do
           before do
-            allow(order).to receive(:confirm?).and_return(false)
+            allow(order).to receive(:can_complete?).and_return(false)
             allow(order).to receive(:errors).and_return(double(full_messages: ['failed']))
           end
 
@@ -199,11 +206,11 @@ describe Spree::Admin::OrdersController, type: :controller do
 
     context '#confirm' do
       subject do
-        get :confirm, id: order.number
+        get :confirm, params: { id: order.number }
       end
 
       context 'when in confirm' do
-        before { allow(order).to receive_messages completed?: false, confirm?: true }
+        before { allow(order).to receive_messages completed?: false, can_complete?: true }
 
         it 'renders the confirm page' do
           subject
@@ -213,7 +220,7 @@ describe Spree::Admin::OrdersController, type: :controller do
       end
 
       context 'when before confirm' do
-        before { allow(order).to receive_messages completed?: false, confirm?: false }
+        before { allow(order).to receive_messages completed?: false, can_complete?: false }
 
         it 'renders the confirm_advance template (to allow refreshing of the order)' do
           subject
@@ -234,7 +241,7 @@ describe Spree::Admin::OrdersController, type: :controller do
 
     context "#complete" do
       subject do
-        put :complete, id: order.number
+        put :complete, params: { id: order.number }
       end
 
       context 'when successful' do
@@ -288,9 +295,9 @@ describe Spree::Admin::OrdersController, type: :controller do
       end
 
       it "does not display duplicated results" do
-        get :index, q: {
+        get :index, params: { q: {
           line_items_variant_id_in: Spree::Order.first.variants.map(&:id)
-        }
+        } }
         expect(assigns[:orders].map(&:number).count).to eq 1
       end
     end
@@ -300,18 +307,18 @@ describe Spree::Admin::OrdersController, type: :controller do
       let!(:finalized_adjustment) { create(:adjustment, finalized: true, adjustable: order, order: order) }
 
       it "changes all the finalized adjustments to unfinalized" do
-        post :unfinalize_adjustments, id: order.number
+        post :unfinalize_adjustments, params: { id: order.number }
         expect(finalized_adjustment.reload.finalized).to eq(false)
       end
 
       it "sets the flash success message" do
-        post :unfinalize_adjustments, id: order.number
+        post :unfinalize_adjustments, params: { id: order.number }
         expect(flash[:success]).to eql('All adjustments successfully unfinalized!')
       end
 
       it "redirects back" do
-        post :unfinalize_adjustments, id: order.number
-        expect(response).to redirect_to(:back)
+        post :unfinalize_adjustments, params: { id: order.number }
+        expect(response).to redirect_to(spree.admin_order_adjustments_path(order))
       end
     end
 
@@ -320,18 +327,18 @@ describe Spree::Admin::OrdersController, type: :controller do
       let!(:not_finalized_adjustment) { create(:adjustment, finalized: false, adjustable: order, order: order) }
 
       it "changes all the unfinalized adjustments to finalized" do
-        post :finalize_adjustments, id: order.number
+        post :finalize_adjustments, params: { id: order.number }
         expect(not_finalized_adjustment.reload.finalized).to eq(true)
       end
 
       it "sets the flash success message" do
-        post :finalize_adjustments, id: order.number
+        post :finalize_adjustments, params: { id: order.number }
         expect(flash[:success]).to eql('All adjustments successfully finalized!')
       end
 
       it "redirects back" do
-        post :finalize_adjustments, id: order.number
-        expect(response).to redirect_to(:back)
+        post :finalize_adjustments, params: { id: order.number }
+        expect(response).to redirect_to(spree.admin_order_adjustments_path(order))
       end
     end
   end
@@ -389,7 +396,7 @@ describe Spree::Admin::OrdersController, type: :controller do
 
     it "raise active record not found" do
       expect {
-        get :edit, id: 0
+        get :edit, params: { id: 0 }
       }.to raise_error ActiveRecord::RecordNotFound
     end
   end

@@ -1,8 +1,8 @@
 # encoding: utf-8
 
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Variant, type: :model do
+RSpec.describe Spree::Variant, type: :model do
   let!(:variant) { create(:variant) }
 
   it_behaves_like 'default_price'
@@ -16,6 +16,12 @@ describe Spree::Variant, type: :model do
     it "should validate price is 0" do
       variant.price = 0
       expect(variant).to be_valid
+    end
+
+    it "should require a product" do
+      expect(variant).to be_valid
+      variant.product = nil
+      expect(variant).to be_invalid
     end
   end
 
@@ -63,20 +69,22 @@ describe Spree::Variant, type: :model do
 
       let(:tax_category) { create(:tax_category) }
 
-      let!(:high_vat) { create(:tax_rate, included_in_price: true, amount: 0.25, zone: high_vat_zone, tax_category: tax_category) }
-      let!(:low_vat) { create(:tax_rate, included_in_price: true, amount: 0.15, zone: low_vat_zone, tax_category: tax_category) }
+      let!(:high_vat) { create(:tax_rate, included_in_price: true, amount: 0.25, zone: high_vat_zone, tax_categories: [tax_category]) }
+      let!(:low_vat) { create(:tax_rate, included_in_price: true, amount: 0.15, zone: low_vat_zone, tax_categories: [tax_category]) }
 
-      let(:product) { create(:product, tax_category: tax_category) }
+      let(:product) { build(:product, tax_category: tax_category) }
 
-      subject(:new_variant) { create(:variant, price: 15, product: product) }
+      subject(:new_variant) { build(:variant, price: 15) }
 
       it "creates the appropriate prices for them" do
-        # default price + FR, DE, DK
-        expect { new_variant }.to change { Spree::Price.count }.by(4)
+        product.variants << new_variant
+        product.save!
         expect(new_variant.prices.find_by(country_iso: "FR").amount).to eq(17.25)
         expect(new_variant.prices.find_by(country_iso: "DE").amount).to eq(18.75)
         expect(new_variant.prices.find_by(country_iso: "DK").amount).to eq(18.75)
         expect(new_variant.prices.find_by(country_iso: nil).amount).to eq(15.00)
+        # default price + FR, DE, DK
+        expect(new_variant.prices.count).to eq(4)
       end
 
       context "when the products price changes" do
@@ -178,14 +186,6 @@ describe Spree::Variant, type: :model do
     end
   end
 
-  context "#currency" do
-    it "returns the globally configured currency" do
-      Spree::Deprecation.silence do
-        expect(variant.currency).to eql "USD"
-      end
-    end
-  end
-
   context "#display_amount" do
     it "returns a Spree::Money" do
       variant.price = 21.22
@@ -208,9 +208,7 @@ describe Spree::Variant, type: :model do
       let(:pricing_options_germany) { Spree::Config.pricing_options_class.new(currency: "EUR") }
       let(:pricing_options_united_states) { Spree::Config.pricing_options_class.new(currency: "USD") }
       before do
-        variant.prices << create(:price, variant: variant, currency: "USD", amount: 12.12, is_default: false)
-        variant.prices << create(:price, variant: variant, currency: "EUR", amount: 29.99)
-        variant.prices << create(:price, variant: variant, currency: "EUR", amount: 10.00, is_default: false)
+        variant.prices.create(currency: "EUR", amount: 29.99)
         variant.reload
       end
 
@@ -227,7 +225,7 @@ describe Spree::Variant, type: :model do
     context "when adding multiple prices" do
       it "it can reassign a default price" do
         expect(variant.default_price.amount).to eq(19.99)
-        variant.prices << create(:price, variant: variant, currency: "USD", amount: 12.12)
+        variant.prices.create(currency: "USD", amount: 12.12)
         expect(variant.reload.default_price.amount).to eq(12.12)
       end
     end
@@ -569,6 +567,16 @@ describe Spree::Variant, type: :model do
         it 'can_supply? return true' do
           expect(variant.can_supply?).to be true
         end
+      end
+    end
+
+    describe "cache clearing on update" do
+      it "correctly reports after updating track_inventory" do
+        variant.stock_items.first.set_count_on_hand 0
+        expect(variant).not_to be_in_stock
+
+        variant.update!(track_inventory: false)
+        expect(variant).to be_in_stock
       end
     end
   end

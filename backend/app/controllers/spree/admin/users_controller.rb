@@ -1,11 +1,12 @@
 module Spree
   module Admin
     class UsersController < ResourceController
-      rescue_from Spree::Core::DestroyWithOrdersError, with: :user_destroy_with_orders_error
+      rescue_from ActiveRecord::DeleteRestrictionError, with: :user_destroy_with_orders_error
 
       after_action :sign_in_if_change_own_password, only: :update
 
-      before_action :load_roles, :load_stock_locations, only: [:edit, :new]
+      before_action :load_roles, only: [:index, :edit, :new]
+      before_action :load_stock_locations, only: [:edit, :new]
 
       def index
         respond_with(@collection) do |format|
@@ -29,6 +30,7 @@ module Spree
           load_roles
           load_stock_locations
 
+          flash.now[:error] = @user.errors.full_messages.join(", ")
           render :new, status: :unprocessable_entity
         end
       end
@@ -37,12 +39,14 @@ module Spree
         if @user.update_attributes(user_params)
           set_roles
           set_stock_locations
+
           flash[:success] = Spree.t(:account_updated)
           redirect_to edit_admin_user_url(@user)
         else
           load_roles
           load_stock_locations
 
+          flash.now[:error] = @user.errors.full_messages.join(", ")
           render :edit, status: :unprocessable_entity
         end
       end
@@ -93,7 +97,7 @@ module Spree
       private
 
       def collection
-        return @collection if @collection.present?
+        return @collection if @collection
         if request.xhr? && params[:q].present?
           @collection = Spree.user_class.includes(:bill_address, :ship_address)
                             .where("spree_users.email #{LIKE} :search
@@ -105,7 +109,9 @@ module Spree
                             .limit(params[:limit] || 100)
         else
           @search = Spree.user_class.ransack(params[:q])
-          @collection = @search.result.page(params[:page]).per(Spree::Config[:admin_products_per_page])
+          @collection = @search.result.includes(:spree_roles)
+          @collection = @collection.includes(:spree_orders)
+          @collection = @collection.page(params[:page]).per(Spree::Config[:admin_products_per_page])
         end
       end
 
@@ -137,7 +143,9 @@ module Spree
 
       def load_roles
         @roles = Spree::Role.all
-        @user_roles = @user.spree_roles
+        if @user
+          @user_roles = @user.spree_roles
+        end
       end
 
       def load_stock_locations
@@ -145,15 +153,8 @@ module Spree
       end
 
       def set_roles
-        # FIXME: user_params permits the roles that can be set, if spree_role_ids is set.
-        # when submitting a user with no roles, the param is not present. Because users can be updated
-        # with some users being able to set roles, and some users not being able to set roles, we have to check
-        # if the roles should be cleared, or unchanged again here. The roles form should probably hit a seperate
-        # action or controller to remedy this.
-        if user_params[:spree_role_ids]
+        if user_params[:spree_role_ids] && can?(:manage, Spree::Role)
           @user.spree_roles = Spree::Role.where(id: user_params[:spree_role_ids])
-        elsif can?(:manage, Spree::Role)
-          @user.spree_roles = []
         end
       end
 

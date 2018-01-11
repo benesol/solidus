@@ -1,4 +1,4 @@
-require 'spec_helper'
+require 'rails_helper'
 
 RSpec.describe Spree::PromotionCode do
   context 'callbacks' do
@@ -155,30 +155,34 @@ RSpec.describe Spree::PromotionCode do
     end
     let(:promo_adjustment) { order.adjustments.promotion.first }
     before do
-      order.next! until order.confirm?
+      order.next! until order.can_complete?
 
       FactoryGirl.create(:order_with_line_items, line_items_price: 40, shipment_cost: 0).tap do |order|
         FactoryGirl.create(:payment, amount: 30, order: order)
         promotion.activate(order: order, promotion_code: code)
-        order.next! until order.confirm?
+        order.next! until order.can_complete?
         order.complete!
       end
     end
+
     it "makes the promotion ineligible" do
       expect{
         order.complete
       }.to change{ promo_adjustment.reload.eligible }.to(false)
     end
+
     it "adjusts the promo_total" do
       expect{
         order.complete
       }.to change(order, :promo_total).by(10)
     end
+
     it "increases the total to remove the promo" do
       expect{
         order.complete
       }.to change(order, :total).from(30).to(40)
     end
+
     it "resets the state of the order" do
       expect{
         order.complete

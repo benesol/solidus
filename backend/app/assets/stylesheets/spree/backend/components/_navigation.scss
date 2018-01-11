@@ -14,7 +14,6 @@ nav.menu {
         text-align: left;
         border: 1px solid transparent;
         font-weight: $font-weight-bold;
-        font-size: 90%;
       }
 
       &.active a {
@@ -29,24 +28,16 @@ nav.menu {
 .admin-nav {
   border-right: $border-sidebar;
   background: $color-sidebar-bg;
-  z-index: $z-index-navbar-flyout;
+  z-index: $zindex-sticky;
 }
 
 .admin-nav-header {
-  padding: 15px;
-  height: 58px; // height of .page-title
-  box-sizing: content-box;
   background-color: $color-1;
   border-bottom: 1px solid $color-border;
-
-  a {
-    display: inline-block;
-    line-height: 58px;
-  }
-
-  img {
-    vertical-align: middle;
-  }
+  text-align: center;
+  // Using line height for proper vertical centering.
+  // As line height does not take the border width into account we need to subtract it.
+  line-height: $main-header-height - 1px;
 }
 
 .admin-nav-menu {
@@ -119,13 +110,13 @@ nav.menu {
     &:before {
       position: absolute;
       left: 1em;
-      @include transform(translateX(-50%));
+      transform: translateX(-50%);
     }
   }
 
   // until .fa usage is corrected
   .text {
-    font-family: $base-font-family;
+    font-family: $font-family-base;
     -webkit-font-smoothing: auto;
     -moz-osx-font-smoothing: auto;
   }

@@ -1,7 +1,7 @@
-require 'spec_helper'
+require 'rails_helper'
 
 module Spree
-  describe Reimbursement::Credit, type: :model do
+  RSpec.describe Reimbursement::Credit, type: :model do
     context 'class methods' do
       describe '.total_amount_reimbursed_for' do
         subject { Spree::Reimbursement::Credit.total_amount_reimbursed_for(reimbursement) }
@@ -12,7 +12,7 @@ module Spree
         before { allow(reimbursement).to receive(:credits).and_return([credit_double, credit_double]) }
 
         it 'should sum the amounts of all of the reimbursements credits' do
-          expect(subject).to eq BigDecimal.new('199.98')
+          expect(subject).to eq BigDecimal('199.98')
         end
       end
     end

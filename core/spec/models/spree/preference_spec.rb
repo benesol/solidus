@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::Preference, type: :model do
+RSpec.describe Spree::Preference, type: :model do
   it "should require a key" do
     @preference = Spree::Preference.new
     @preference.key = :test
@@ -15,7 +15,7 @@ describe Spree::Preference, type: :model do
       p.key = key
       p.save
 
-      Spree::Preference.find_by_key(key)
+      Spree::Preference.find_by(key: key)
     end
 
     it ":boolean" do

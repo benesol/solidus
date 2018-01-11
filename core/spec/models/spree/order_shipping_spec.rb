@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::OrderShipping do
+RSpec.describe Spree::OrderShipping do
   let(:order) { create(:order_ready_to_ship, line_items_count: 1) }
 
   def emails
@@ -19,7 +19,11 @@ describe Spree::OrderShipping do
 
     describe "shipment email" do
       it "should send a shipment email" do
-        expect { subject }.to change { emails.size }.by(1)
+        expect {
+          perform_enqueued_jobs {
+            subject
+          }
+        }.to change { emails.size }.by(1)
         expect(emails.last.subject).to eq("#{order.store.name} Shipment Notification ##{order.number}")
       end
     end
@@ -30,7 +34,7 @@ describe Spree::OrderShipping do
 
     it "updates shipment.shipped_at" do
       Timecop.freeze do |now|
-        expect { subject }.to change { shipment.shipped_at }.from(nil).to(now)
+        expect { subject }.to change { shipment.shipped_at }.from(nil).to be_within(1.second).of(now)
       end
     end
 
@@ -40,7 +44,7 @@ describe Spree::OrderShipping do
         Timecop.freeze(future) do
           subject
         end
-      end.to change { order.updated_at }.from(order.updated_at).to(future)
+      end.to change { order.updated_at }.to be_within(1.second).of(future)
     end
   end
 

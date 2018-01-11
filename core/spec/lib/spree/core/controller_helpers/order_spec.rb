@@ -1,10 +1,10 @@
-require 'spec_helper'
+require 'rails_helper'
 
 class FakesController < ApplicationController
   include Spree::Core::ControllerHelpers::Order
 end
 
-describe Spree::Core::ControllerHelpers::Order, type: :controller do
+RSpec.describe Spree::Core::ControllerHelpers::Order, type: :controller do
   controller(FakesController) {}
 
   let(:user) { create(:user) }
@@ -19,11 +19,26 @@ describe Spree::Core::ControllerHelpers::Order, type: :controller do
 
   describe '#simple_current_order' do
     it "returns an empty order" do
-      expect(controller.simple_current_order.item_count).to eq 0
+      Spree::Deprecation.silence do
+        expect(controller.simple_current_order.item_count).to eq 0
+      end
     end
     it 'returns Spree::Order instance' do
-      allow(controller).to receive_messages(cookies: double(signed: { guest_token: order.guest_token }))
-      expect(controller.simple_current_order).to eq order
+      Spree::Deprecation.silence do
+        allow(controller).to receive_messages(cookies: double(signed: { guest_token: order.guest_token }))
+        expect(controller.simple_current_order).to eq order
+      end
+    end
+    it 'assigns the current_store id' do
+      Spree::Deprecation.silence do
+        expect(controller.simple_current_order.store_id).to eq store.id
+      end
+    end
+    it 'is deprecated' do
+      Spree::Deprecation.silence do
+        expect(Spree::Deprecation).to(receive(:warn))
+        controller.simple_current_order
+      end
     end
   end
 
@@ -34,16 +49,27 @@ describe Spree::Core::ControllerHelpers::Order, type: :controller do
         expect(controller.current_order).to eq order
       end
     end
+
     context 'create_order_if_necessary option is true' do
+      subject { controller.current_order(create_order_if_necessary: true) }
+
       it 'creates new order' do
         expect {
-          controller.current_order(create_order_if_necessary: true)
-        }.to change(Spree::Order, :count).to(1)
+          subject
+        }.to change(Spree::Order, :count).from(0).to(1)
       end
 
       it 'assigns the current_store id' do
-        controller.current_order(create_order_if_necessary: true)
+        subject
         expect(Spree::Order.last.store_id).to eq store.id
+      end
+
+      it 'records last_ip_address' do
+        expect {
+          subject
+        }.to change {
+          Spree::Order.last.try!(:last_ip_address)
+        }.from(nil).to("0.0.0.0")
       end
     end
   end
@@ -66,14 +92,26 @@ describe Spree::Core::ControllerHelpers::Order, type: :controller do
   end
 
   describe '#set_current_order' do
-    let(:incomplete_order) { create(:order, user: user) }
+    let(:incomplete_order) { create(:order, store: incomplete_order_store, user: user) }
 
     context 'when current order not equal to users incomplete orders' do
       before { allow(controller).to receive_messages(current_order: order, last_incomplete_order: incomplete_order, cookies: double(signed: { guest_token: 'guest_token' })) }
 
-      it 'calls Spree::Order#merge! method' do
-        expect(order).to receive(:merge!).with(incomplete_order, user)
-        controller.set_current_order
+      context "an order from another store" do
+        let(:incomplete_order_store) { create(:store) }
+
+        it 'doesnt call Spree::Order#merge! method' do
+          expect(order).to_not receive(:merge!)
+          controller.set_current_order
+        end
+      end
+      context "an order from the same store" do
+        let(:incomplete_order_store) { store }
+
+        it 'calls Spree::Order#merge! method' do
+          expect(order).to receive(:merge!).with(incomplete_order, user)
+          controller.set_current_order
+        end
       end
     end
   end

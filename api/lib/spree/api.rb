@@ -1,6 +1,6 @@
 require 'spree/core'
 
-require 'rabl'
+require 'responders'
 
 module Spree
   module Api

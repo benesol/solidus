@@ -40,13 +40,12 @@ require 'spree/testing_support/url_helpers'
 require 'spree/testing_support/order_walkthrough'
 require 'spree/testing_support/capybara_ext'
 
-require 'paperclip/matchers'
-
 require 'capybara-screenshot/rspec'
 Capybara.save_path = ENV['CIRCLE_ARTIFACTS'] if ENV['CIRCLE_ARTIFACTS']
 
 require 'capybara/poltergeist'
 Capybara.javascript_driver = :poltergeist
+Capybara.exact = true
 
 ActionView::Base.raise_on_missing_translations = true
 
@@ -69,6 +68,15 @@ RSpec.configure do |config|
 
   config.before :suite do
     DatabaseCleaner.clean_with :truncation
+  end
+
+  config.when_first_matching_example_defined(type: :feature) do
+    config.before :suite do
+      # Preload assets
+      # This should avoid capybara timeouts, and avoid counting asset compilation
+      # towards the timing of the first feature spec.
+      Rails.application.precompiled_assets
+    end
   end
 
   config.prepend_before(:each) do
@@ -108,8 +116,6 @@ RSpec.configure do |config|
   config.include Spree::TestingSupport::UrlHelpers
   config.include Spree::TestingSupport::ControllerRequests, type: :controller
   config.include Spree::TestingSupport::Flash
-
-  config.include Paperclip::Shoulda::Matchers
 
   config.extend WithModel
 

@@ -70,10 +70,11 @@ module Spree
 
     @@product_attributes = [
       :name, :description, :available_on, :permalink, :meta_description,
-      :meta_keywords, :price, :sku, :deleted_at, :prototype_id,
+      :meta_keywords, :price, :sku, :deleted_at,
       :option_values_hash, :weight, :height, :width, :depth,
       :shipping_category_id, :tax_category_id,
-      :taxon_ids, :option_type_ids, :cost_currency, :cost_price]
+      :taxon_ids, :option_type_ids, :cost_currency, :cost_price
+    ]
 
     @@property_attributes = [:name, :presentation]
 
@@ -81,14 +82,15 @@ module Spree
 
     @@shipment_attributes = [
       :special_instructions, :stock_location_id, :id, :tracking,
-      :selected_shipping_rate_id]
+      :selected_shipping_rate_id
+    ]
 
     # month / year may be provided by some sources, or others may elect to use one field
     @@source_attributes = [
       :number, :month, :year, :expiry, :verification_value,
       :first_name, :last_name, :cc_type, :gateway_customer_profile_id,
       :gateway_payment_profile_id, :last_digits, :name, :encrypted_data,
-      :existing_card_id
+      :existing_card_id, :wallet_payment_source_id
     ]
 
     @@stock_item_attributes = [:variant, :stock_location, :backorderable, :variant_id]
@@ -96,19 +98,23 @@ module Spree
     @@stock_location_attributes = [
       :name, :active, :address1, :address2, :city, :zipcode,
       :backorderable_default, :state_name, :state_id, :country_id, :phone,
-      :propagate_all_variants]
+      :propagate_all_variants
+    ]
 
     @@stock_movement_attributes = [
-      :quantity, :stock_item, :stock_item_id, :originator, :action]
+      :quantity, :stock_item, :stock_item_id, :originator, :action
+    ]
 
     @@store_attributes = [:name, :url, :seo_title, :meta_keywords,
-                          :meta_description, :default_currency, :mail_from_address]
+                          :meta_description, :default_currency,
+                          :mail_from_address, :cart_tax_country_iso]
 
     @@taxonomy_attributes = [:name]
 
     @@taxon_attributes = [
       :name, :parent_id, :position, :icon, :description, :permalink, :taxonomy_id,
-      :meta_description, :meta_keywords, :meta_title, :child_index]
+      :meta_description, :meta_keywords, :meta_title, :child_index
+    ]
 
     @@transfer_item_attributes = [:variant_id, :expected_quantity, :received_quantity]
 
@@ -122,6 +128,7 @@ module Spree
       :name, :presentation, :cost_price, :lock_version,
       :position, :track_inventory,
       :product_id, :product, :option_values_attributes, :price,
-      :weight, :height, :width, :depth, :sku, :cost_currency, option_value_ids: [], options: [:name, :value]]
+      :weight, :height, :width, :depth, :sku, :cost_currency, option_value_ids: [], options: [:name, :value]
+    ]
   end
 end

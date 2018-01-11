@@ -18,8 +18,10 @@ module Spree
 
     scope :non_reimbursement, -> { where(reimbursement_id: nil) }
 
+    delegate :currency, to: :payment
+
     def money
-      Spree::Money.new(amount, { currency: payment.currency })
+      Spree::Money.new(amount, { currency: currency })
     end
     alias display_amount money
 
@@ -40,7 +42,7 @@ module Spree
     def perform!
       return true if transaction_id.present?
 
-      credit_cents = Spree::Money.new(amount.to_f, currency: payment.currency).money.cents
+      credit_cents = money.cents
 
       @response = process!(credit_cents)
 
@@ -74,7 +76,7 @@ module Spree
     end
 
     def amount_is_less_than_or_equal_to_allowed_amount
-      if amount > payment.credit_allowed
+      if payment && amount > payment.credit_allowed
         errors.add(:amount, :greater_than_allowed)
       end
     end

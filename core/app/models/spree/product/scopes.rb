@@ -46,12 +46,12 @@ module Spree
     # This scope selects products in taxon AND all its descendants
     # If you need products only within one taxon use
     #
-    #   Spree::Product.joins(:taxons).where(Taxon.table_name => { :id => taxon.id })
+    #   Spree::Product.joins(:taxons).where(Taxon.table_name => { id: taxon.id })
     #
     # If you're using count on the result of this scope, you must use the
     # `:distinct` option as well:
     #
-    #   Spree::Product.in_taxon(taxon).count(:distinct => true)
+    #   Spree::Product.in_taxon(taxon).count(distinct: true)
     #
     # This is so that the count query is distinct'd:
     #
@@ -84,12 +84,12 @@ module Spree
     # note that it can test for properties with NULL values, but not for absent values
     add_search_scope :with_property_value do |property, value|
       joins(:properties)
-        .where("#{ProductProperty.table_name}.value = ?", value)
+        .where("#{Spree::ProductProperty.table_name}.value = ?", value)
         .where(property_conditions(property))
     end
 
     add_search_scope :with_option do |option|
-      option_types = OptionType.table_name
+      option_types = Spree::OptionType.table_name
       conditions = case option
                    when String     then { "#{option_types}.name" => option }
                    when OptionType then { "#{option_types}.id" => option.id }
@@ -100,10 +100,10 @@ module Spree
     end
 
     add_search_scope :with_option_value do |option, value|
-      option_values = OptionValue.table_name
+      option_values = Spree::OptionValue.table_name
       option_type_id = case option
-                       when String then OptionType.find_by(name: option) || option.to_i
-                       when OptionType then option.id
+                       when String then Spree::OptionType.find_by(name: option) || option.to_i
+                       when Spree::OptionType then option.id
         else option.to_i
       end
 
@@ -117,7 +117,7 @@ module Spree
     add_search_scope :with do |value|
       includes(variants_including_master: :option_values).
       includes(:product_properties).
-      where("#{OptionValue.table_name}.name = ? OR #{ProductProperty.table_name}.value = ?", value, value)
+      where("#{Spree::OptionValue.table_name}.name = ? OR #{Spree::ProductProperty.table_name}.value = ?", value, value)
     end
 
     # Finds all products that have a name containing the given words.
@@ -147,48 +147,54 @@ module Spree
     # there is alternative faster and more elegant solution, it has small drawback though,
     # it doesn stack with other scopes :/
     #
-    # :joins => "LEFT OUTER JOIN (SELECT line_items.variant_id as vid, COUNT(*) as cnt FROM line_items GROUP BY line_items.variant_id) AS popularity_count ON variants.id = vid",
-    # :order => 'COALESCE(cnt, 0) DESC'
+    # joins: "LEFT OUTER JOIN (SELECT line_items.variant_id as vid, COUNT(*) as cnt FROM line_items GROUP BY line_items.variant_id) AS popularity_count ON variants.id = vid",
+    # order: 'COALESCE(cnt, 0) DESC'
     add_search_scope :descend_by_popularity do
       joins(:master).
       order(%{
            COALESCE((
              SELECT
-               COUNT(#{LineItem.quoted_table_name}.id)
+               COUNT(#{Spree::LineItem.quoted_table_name}.id)
              FROM
-               #{LineItem.quoted_table_name}
+               #{Spree::LineItem.quoted_table_name}
              JOIN
-               #{Variant.quoted_table_name} AS popular_variants
+               #{Spree::Variant.quoted_table_name} AS popular_variants
              ON
-               popular_variants.id = #{LineItem.quoted_table_name}.variant_id
+               popular_variants.id = #{Spree::LineItem.quoted_table_name}.variant_id
              WHERE
-               popular_variants.product_id = #{Product.quoted_table_name}.id
+               popular_variants.product_id = #{Spree::Product.quoted_table_name}.id
            ), 0) DESC
         })
     end
 
     add_search_scope :not_deleted do
-      where("#{Product.quoted_table_name}.deleted_at IS NULL or #{Product.quoted_table_name}.deleted_at >= ?", Time.current)
+      where("#{Spree::Product.quoted_table_name}.deleted_at IS NULL or #{Spree::Product.quoted_table_name}.deleted_at >= ?", Time.current)
+    end
+
+    scope :with_master_price, -> do
+      joins(:master).where(Spree::Price.where(Spree::Variant.arel_table[:id].eq(Spree::Price.arel_table[:variant_id])).exists)
     end
 
     # Can't use add_search_scope for this as it needs a default argument
-    def self.available(available_on = nil, currency = nil)
-      Spree::Deprecation.warn("The second currency argument on Product.available has no effect, and is deprecated", caller) if currency
-      joins(master: :prices).where("#{Product.quoted_table_name}.available_on <= ?", available_on || Time.current)
+    def self.available(available_on = nil)
+      with_master_price.where("#{Spree::Product.quoted_table_name}.available_on <= ?", available_on || Time.current)
     end
     search_scopes << :available
 
-    def self.active(currency = nil)
-      Spree::Deprecation.warn("This scope is deprecated, please use .available instead", caller)
-      not_deleted.available(nil, currency)
-    end
-    search_scopes << :active
-
     add_search_scope :taxons_name_eq do |name|
-      group("spree_products.id").joins(:taxons).where(Taxon.arel_table[:name].eq(name))
+      group("spree_products.id").joins(:taxons).where(Spree::Taxon.arel_table[:name].eq(name))
+    end
+
+    def self.with_variant_sku_cont(sku)
+      sku_match = "%#{sku}%"
+      variant_table = Spree::Variant.arel_table
+      subquery = Spree::Variant.where(variant_table[:sku].matches(sku_match).and(variant_table[:product_id].eq(arel_table[:id])))
+      where(subquery.exists)
     end
 
     def self.distinct_by_product_ids(sort_order = nil)
+      Spree::Deprecation.warn "Product.distinct_by_product_ids is deprecated and should not be used"
+
       sort_column = sort_order.split(" ").first
 
       # Postgres will complain when using ordering by expressions not present in
@@ -217,13 +223,13 @@ module Spree
       private
 
       def price_table_name
-        Price.quoted_table_name
+        Spree::Price.quoted_table_name
       end
 
       # specifically avoid having an order for taxon search (conflicts with main order)
       def prepare_taxon_conditions(taxons)
         ids = taxons.map { |taxon| taxon.self_and_descendants.pluck(:id) }.flatten.uniq
-        joins(:taxons).where("#{Taxon.table_name}.id" => ids)
+        joins(:taxons).where("#{Spree::Taxon.table_name}.id" => ids)
       end
 
       # Produce an array of keywords for use in scopes.
@@ -235,14 +241,14 @@ module Spree
       end
 
       def get_taxons(*ids_or_records_or_names)
-        taxons = Taxon.table_name
+        taxons = Spree::Taxon.table_name
         ids_or_records_or_names.flatten.map { |t|
           case t
-          when Integer then Taxon.find_by(id: t)
+          when Integer then Spree::Taxon.find_by(id: t)
           when ActiveRecord::Base then t
           when String
-            Taxon.find_by(name: t) ||
-              Taxon.where("#{taxons}.permalink LIKE ? OR #{taxons}.permalink = ?", "%/#{t}/", "#{t}/").first
+            Spree::Taxon.find_by(name: t) ||
+              Spree::Taxon.where("#{taxons}.permalink LIKE ? OR #{taxons}.permalink = ?", "%/#{t}/", "#{t}/").first
           end
         }.compact.flatten.uniq
       end

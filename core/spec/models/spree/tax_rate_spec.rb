@@ -1,6 +1,6 @@
-require 'spec_helper'
+require 'rails_helper'
 
-describe Spree::TaxRate, type: :model do
+RSpec.describe Spree::TaxRate, type: :model do
   it { is_expected.to respond_to(:shipping_rate_taxes) }
 
   context '.for_address' do
@@ -104,7 +104,7 @@ describe Spree::TaxRate, type: :model do
       end
 
       context "when there is a default tax zone" do
-        let(:default_zone) { create(:zone, :with_country, default_tax: true) }
+        let(:default_zone) { create(:zone, :with_country) }
         let(:included_in_price) { false }
         let!(:rate) do
           create(:tax_rate, zone: default_zone, included_in_price: included_in_price)
@@ -133,36 +133,12 @@ describe Spree::TaxRate, type: :model do
     end
   end
 
-  context ".adjust" do
-    let(:zone) { stub_model(Spree::Zone) }
-
-    context "with line items" do
-      let(:line_item) { stub_model(Spree::LineItem) }
-
-      it 'should emit a deprecation warning and call the item adjuster' do
-        expect(Spree::Deprecation).to receive(:warn)
-        expect(Spree::Tax::ItemAdjuster).to receive_message_chain(:new, :adjust!)
-        Spree::TaxRate.adjust(zone, [line_item])
-      end
-    end
-
-    context "with shipments" do
-      let(:shipment) { stub_model(Spree::Shipment) }
-
-      it 'should emit a deprecation warning and call the item adjuster' do
-        expect(Spree::Deprecation).to receive(:warn)
-        expect(Spree::Tax::ItemAdjuster).to receive_message_chain(:new, :adjust!)
-        Spree::TaxRate.adjust(zone, [shipment])
-      end
-    end
-  end
-
   describe "#adjust" do
     let(:taxable_address) { create(:address) }
     let(:order) { create(:order_with_line_items, ship_address: order_address) }
-    let(:tax_zone) { create(:zone, countries: [taxable_address.country], default_tax: default_tax) }
+    let(:tax_zone) { create(:zone, countries: [taxable_address.country]) }
     let(:foreign_address) { create(:address, country_iso_code: "CA") }
-    let!(:foreign_zone) { create(:zone, countries: [foreign_address.country], default_tax: false) }
+    let!(:foreign_zone) { create(:zone, countries: [foreign_address.country]) }
     let(:tax_rate) do
       create(:tax_rate,
         included_in_price: included_in_price,
@@ -176,80 +152,40 @@ describe Spree::TaxRate, type: :model do
 
     describe 'adjustments' do
       before do
-        tax_rate.adjust(order.tax_zone, item)
+        tax_rate.adjust(nil, item)
       end
 
       let(:adjustment_label) { item.adjustments.tax.first.label }
 
       context 'for included rates' do
         let(:included_in_price) { true }
-        let(:default_tax) { true }
+        let(:order_address) { taxable_address }
 
-        context 'when they are not refunded' do
-          let(:order_address) { taxable_address }
+        context 'with show rate in label' do
+          let(:show_rate_in_label) { true }
 
-          context 'with show rate in label' do
-            let(:show_rate_in_label) { true }
-
-            it 'shows the rate in the label' do
-              expect(adjustment_label).to include("12.500%")
-            end
-
-            it 'adds a remark that the rate is included in the price' do
-              expect(adjustment_label).to include("Included in Price")
-            end
+          it 'shows the rate in the label' do
+            expect(adjustment_label).to include("12.500%")
           end
 
-          context 'with show rate in label turned off' do
-            let(:show_rate_in_label) { false }
-
-            it 'does not show the rate in the label' do
-              expect(adjustment_label).not_to include("12.500%")
-            end
-
-            it 'does not have two consecutive spaces' do
-              expect(adjustment_label).not_to include("  ")
-            end
-
-            it 'adds a remark that the rate is included in the price' do
-              expect(adjustment_label).to include("Included in Price")
-            end
+          it 'adds a remark that the rate is included in the price' do
+            expect(adjustment_label).to include("Included in Price")
           end
         end
 
-        context 'when they are refunded' do
-          let(:order_address) { foreign_address }
+        context 'with show rate in label turned off' do
+          let(:show_rate_in_label) { false }
 
-          context 'with show rate in label' do
-            let(:show_rate_in_label) { true }
-
-            it 'shows the word "refund" in the label' do
-              expect(adjustment_label).to include("Refund")
-            end
-
-            it 'shows the rate in the label' do
-              expect(adjustment_label).to include("12.500%")
-            end
-
-            it 'adds a remark that the rate is included in the price' do
-              expect(adjustment_label).to include("Included in Price")
-            end
+          it 'does not show the rate in the label' do
+            expect(adjustment_label).not_to include("12.500%")
           end
 
-          context 'with show rate in label turned off' do
-            let(:show_rate_in_label) { false }
+          it 'does not have two consecutive spaces' do
+            expect(adjustment_label).not_to include("  ")
+          end
 
-            it 'shows the word "refund" in the label' do
-              expect(adjustment_label).to include("Refund")
-            end
-
-            it 'does not show the rate in the label' do
-              expect(adjustment_label).not_to include("12.500%")
-            end
-
-            it 'adds a remark that the rate is included in the price' do
-              expect(adjustment_label).to include("Included in Price")
-            end
+          it 'adds a remark that the rate is included in the price' do
+            expect(adjustment_label).to include("Included in Price")
           end
         end
       end
@@ -257,7 +193,6 @@ describe Spree::TaxRate, type: :model do
       context 'for additional rates' do
         let(:included_in_price) { false }
         let(:order_address) { taxable_address }
-        let(:default_tax) { false }
 
         context 'with show rate in label' do
           let(:show_rate_in_label) { true }
@@ -283,6 +218,98 @@ describe Spree::TaxRate, type: :model do
           end
         end
       end
+    end
+  end
+
+  describe "#active?" do
+    subject(:rate) { create(:tax_rate, validity).active? }
+
+    context "when validity is not set" do
+      let(:validity) { {} }
+
+      it { is_expected.to eq(true) }
+    end
+
+    context "when starts_at is set" do
+      context "now" do
+        let(:validity) { { starts_at: DateTime.now } }
+
+        it { is_expected.to eq(true) }
+      end
+
+      context "in the past" do
+        let(:validity) { { starts_at: 1.day.ago } }
+
+        it { is_expected.to eq(true) }
+      end
+
+      context "in the future" do
+        let(:validity) { { starts_at: 1.day.from_now } }
+
+        it { is_expected.to eq(false) }
+      end
+    end
+
+    context "when expires_at is set" do
+      context "now" do
+        let(:validity) { { expires_at: DateTime.now } }
+
+        it { is_expected.to eq(false) }
+      end
+
+      context "in the past" do
+        let(:validity) { { expires_at: 1.day.ago } }
+
+        it { is_expected.to eq(false) }
+      end
+
+      context "in the future" do
+        let(:validity) { { expires_at: 1.day.from_now } }
+
+        it { is_expected.to eq(true) }
+      end
+    end
+
+    context "when starts_at and expires_at are set" do
+      context "so that today is in range" do
+        let(:validity) { { starts_at: 1.day.ago, expires_at: 1.day.from_now } }
+
+        it { is_expected.to eq(true) }
+      end
+
+      context "both in the past" do
+        let(:validity) { { starts_at: 2.days.ago, expires_at: 1.day.ago } }
+
+        it { is_expected.to eq(false) }
+      end
+
+      context "both in the future" do
+        let(:validity) { { starts_at: 1.day.from_now, expires_at: 2.days.from_now } }
+
+        it { is_expected.to eq(false) }
+      end
+    end
+  end
+
+  describe '#tax_category (deprecated)' do
+    let(:tax_rate) { create(:tax_rate, tax_categories: [tax_category]) }
+    let(:tax_category) { create(:tax_category) }
+
+    it "returns the first tax category" do
+      tax_category = Spree::Deprecation.silence { tax_rate.tax_category }
+      expect(tax_category).to eq(tax_category)
+    end
+  end
+
+  describe '#tax_category= (deprecated)' do
+    let(:tax_rate) { Spree::TaxRate.new }
+    let(:tax_category) { create(:tax_category) }
+
+    it "can assign the tax categories" do
+      Spree::Deprecation.silence {
+        tax_rate.tax_category = tax_category
+      }
+      expect(tax_rate.tax_categories).to eq([tax_category])
     end
   end
 end

@@ -10,14 +10,19 @@ module Spree
             'fonts',
             'colors',
             'lists',
-            'icons',
-            'tags'
+            'icons'
           ],
           forms: [
             'building_forms',
+            'buttons',
+            'helper_text',
+            'inputs',
+            'labels',
             'validation'
           ],
           components: [
+            'pills',
+            'modals',
             'tabs'
           ],
           messaging: [
