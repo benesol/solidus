@@ -50,7 +50,11 @@ module Spree
       def index
         authorize! :index, Order
         @orders = paginate(Spree::Order.ransack(params[:q]).result)
-        respond_with(@orders)
+        if params.key?("details") && can?(:admin, @order)
+          respond_with(@orders, default_template: :mine)
+        else
+          respond_with(@orders)
+        end
       end
 
       def show
