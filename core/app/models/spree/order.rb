@@ -114,6 +114,7 @@ module Spree
     accepts_nested_attributes_for :ship_address
     accepts_nested_attributes_for :payments
     accepts_nested_attributes_for :shipments
+    accepts_nested_attributes_for :adjustments
 
     # Needs to happen before save_permalink is called
     before_validation :associate_store

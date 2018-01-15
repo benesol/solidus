@@ -9,7 +9,10 @@ Spree::Core::Engine.routes.draw do
   end
 
   namespace :api, defaults: { format: 'json' } do
-    resources :promotions, only: [:show]
+    resources :promotions do
+      resources :promotion_rules, only: [:show, :create, :destroy]
+      resources :promotion_actions, only: [:show, :create, :destroy]
+      resources :promotion_codes, only: [:index]
 
     resources :products do
       resources :images
