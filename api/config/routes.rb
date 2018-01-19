@@ -13,6 +13,7 @@ Spree::Core::Engine.routes.draw do
       resources :promotion_rules, only: [:show, :create, :destroy]
       resources :promotion_actions, only: [:show, :create, :destroy]
       resources :promotion_codes, only: [:index]
+    end
 
     resources :products do
       resources :images
