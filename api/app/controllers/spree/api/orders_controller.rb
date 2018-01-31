@@ -50,7 +50,11 @@ module Spree
       def index
         authorize! :index, Order
         @orders = paginate(Spree::Order.ransack(params[:q]).result)
-        respond_with(@orders)
+        if params.key?("details") && can?(:admin, @order)
+          respond_with(@orders, default_template: :mine)
+        else
+          respond_with(@orders)
+        end
       end
 
       def show
@@ -118,6 +122,7 @@ module Spree
         params[:order][:line_items_attributes] = params[:order].delete(:line_items) if params[:order][:line_items]
         params[:order][:ship_address_attributes] = params[:order].delete(:ship_address) if params[:order][:ship_address].present?
         params[:order][:bill_address_attributes] = params[:order].delete(:bill_address) if params[:order][:bill_address].present?
+        params[:order][:adjustments_attributes] = params[:order].delete(:adjustments) if params[:order][:adjustments]
       end
 
       # @api public

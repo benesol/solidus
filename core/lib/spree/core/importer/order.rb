@@ -112,11 +112,14 @@ module Spree
 
         def self.create_adjustments_from_params(adjustments, order)
           return [] unless adjustments
-          adjustments.each do |a|
+          adjustments.each_key do |k|
+            a = adjustments[k]
             adjustment = order.adjustments.build(
               order:  order,
-              amount: a[:amount].to_d,
-              label:  a[:label]
+              amount: a[:amount].to_f,
+              label:  a[:label],
+              source_type: a[:source_type],
+              source_id: 1
             )
             adjustment.save!
             adjustment.finalize!
