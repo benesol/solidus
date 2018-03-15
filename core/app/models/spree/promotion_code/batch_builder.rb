@@ -13,8 +13,9 @@ class ::Spree::PromotionCode::BatchBuilder
   end
 
   def build_promotion_codes
-    generate_random_codes
+    generated_codes = generate_random_codes
     promotion_code_batch.update!(state: "completed")
+    generated_codes
   rescue => e
     promotion_code_batch.update!(
       error: e.inspect,
@@ -27,18 +28,23 @@ class ::Spree::PromotionCode::BatchBuilder
 
   def generate_random_codes
     total_batches = (number_of_codes.to_f / self.class.batch_size).ceil
+    all_generated_codes = Array.new
 
     total_batches.times do |i|
       codes_for_current_batch = Set.new
-      codes_to_generate = [self.class.batch_size, number_of_codes - i * batch_size].min
-
-      while codes_for_current_batch.size < codes_to_generate
-        new_codes = Array.new(codes_to_generate) { generate_random_code }.to_set
-        codes_for_current_batch += get_unique_codes(new_codes)
+      if self.class.batch_size > 1
+        codes_to_generate = [self.class.batch_size, number_of_codes - i * batch_size].min
+        while codes_for_current_batch.size < codes_to_generate
+          new_codes = Array.new(codes_to_generate) { generate_random_code }.to_set
+          codes_for_current_batch += get_unique_codes(new_codes)
+        end
+      else
+        # If number_of_codes is 1, then create a single code of base_code and no random portion.
+        codes_for_current_batch.add([ base_code ])
       end
 
       codes_for_current_batch.map do |value|
-        promotion.codes.build(value: value, promotion_code_batch: promotion_code_batch)
+        all_generated_codes.push(promotion.codes.build(value: value, promotion_code_batch: promotion_code_batch))
       end
 
       promotion.save!
@@ -48,6 +54,7 @@ class ::Spree::PromotionCode::BatchBuilder
       # codes from memory.
       promotion.reload
     end
+    all_generated_codes
   end
 
   def generate_random_code

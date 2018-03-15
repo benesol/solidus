@@ -22,8 +22,8 @@ class Spree::PromotionBuilder
   def initialize(attributes = {}, promotion_attributes = {}, promotion_rules = {}, promotion_actions = {})
     @promotion = Spree::Promotion.new(promotion_attributes)
     super(attributes)
-    @promotion_rules = promotion_rules
-    @promotion_actions = promotion_actions
+    @promotion_rules = promotion_rules.to_hash
+    @promotion_actions = promotion_actions.to_hash
 
     logMsg = "initializing PromotionBuilder, attributes: #{attributes.pretty_inspect()}, "
     logMsg << "promotion_attributes: #{promotion_attributes.pretty_inspect()}, "
@@ -35,6 +35,8 @@ class Spree::PromotionBuilder
   def perform
     if can_build_codes?
       Rails.logger.info "building #{number_of_codes} promotion codes"
+      # Avoid getting promotion.id 'not null constraint' error when building promotion code(s) in code_builder()
+      @promotion.save
       @promotion.codes = code_builder.build_promotion_codes
     end
 
@@ -155,5 +157,12 @@ class Spree::PromotionBuilder
 
   def code_builder
     self.class.code_builder_class.new(@promotion, @base_code, @number_of_codes)
+    self.class.code_builder_class.new(
+      Spree::PromotionCodeBatch.create!(
+        promotion_id: @promotion.id,
+        base_code: @base_code,
+        number_of_codes: @number_of_codes
+      )
+    )
   end
 end
