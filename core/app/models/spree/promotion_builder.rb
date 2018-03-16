@@ -23,13 +23,14 @@ class Spree::PromotionBuilder
     @promotion = Spree::Promotion.new(promotion_attributes)
     super(attributes)
     @promotion_rules = promotion_rules.to_hash
-    @promotion_actions = promotion_actions.to_hash
+    # Try promotion_actions without to_hash'ing them.
+    @promotion_actions = promotion_actions
 
     logMsg = "initializing PromotionBuilder, attributes: #{attributes.pretty_inspect()}, "
     logMsg << "promotion_attributes: #{promotion_attributes.pretty_inspect()}, "
     logMsg << "promotion_rules: #{promotion_rules.pretty_inspect()}, "
     logMsg << "promotion_actions: #{promotion_actions.pretty_inspect()}"
-    Rails.logger.info logMsg
+    Rails.logger.debug logMsg
   end
 
   def perform
@@ -65,13 +66,21 @@ class Spree::PromotionBuilder
     end
 
     unless @promotion_actions.nil? || @promotion_actions.length == 0
-      Rails.logger.debug "creating #{@promotion_actions.length} promotion actions"
       @promotion_actions.each do |action_key, action_value|
-        promotion_action_attrs = { "type" => action_value[:type] }
+        promotion_action_attrs = Hash.new
+        # Admittedly awkward, but this wasn't working via direct key access at runtime.                                             
+        action_value.each do |attribute_key, attribute_value|
+          if attribute_key == "type"
+            promotion_action_attrs["type"] = attribute_value
+          end
+        end
+        
         promotion_action = @promotion.promotion_actions.create(promotion_action_attrs)
 
         Rails.logger.debug "Created promotion action: #{promotion_action.pretty_inspect()}"
 
+        # TODO: Add this to Gem version in running Docker container...?
+        Rails.logger.debug "Promotion Action Type: #{promotion_action.type}"
         unless action_value[:calculators].nil? || action_value[:calculators].length == 0
           calculator_type = nil
           calculable_type = nil
