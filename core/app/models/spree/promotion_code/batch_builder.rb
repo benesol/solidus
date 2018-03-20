@@ -32,15 +32,16 @@ class ::Spree::PromotionCode::BatchBuilder
 
     total_batches.times do |i|
       codes_for_current_batch = Set.new
-      if self.class.batch_size > 1
+
+      if self.number_of_codes == 1
+        # If number_of_codes is 1, then create a single code of base_code and no random portion.                              
+	      codes_for_current_batch.add(base_code)
+      else 
         codes_to_generate = [self.class.batch_size, number_of_codes - i * batch_size].min
         while codes_for_current_batch.size < codes_to_generate
           new_codes = Array.new(codes_to_generate) { generate_random_code }.to_set
           codes_for_current_batch += get_unique_codes(new_codes)
         end
-      else
-        # If number_of_codes is 1, then create a single code of base_code and no random portion.
-        codes_for_current_batch.add([ base_code ])
       end
 
       codes_for_current_batch.map do |value|
