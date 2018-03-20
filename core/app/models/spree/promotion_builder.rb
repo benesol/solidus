@@ -81,12 +81,12 @@ class Spree::PromotionBuilder
 
         # TODO: Add this to Gem version in running Docker container...?
         Rails.logger.debug "Promotion Action Type: #{promotion_action.type}"
-        unless action_value[:calculators].nil? || action_value[:calculators].length == 0
+        unless action_value["calculators"].nil? || action_value["calculators"].length == 0
           calculator_type = nil
           calculable_type = nil
           calculator_percentage = nil
 
-          action_value[:calculators].each do |calcs_key, calcs_value|
+          action_value["calculators"].each do |calcs_key, calcs_value|
             calcs_value.each do |calc_key, calc_value|
               if calc_key == "type"
                 calculator_type = calc_value
@@ -105,7 +105,7 @@ class Spree::PromotionBuilder
           unless calculator_type.nil? || calculator_type != "Spree::Calculator::PercentOnLineItem" || \
             calculable_type.nil? || calculable_type != "Spree::PromotionAction" || calculator_percentage.nil?
 
-            # TODO: delete the default-created calculator.
+            # Delete the default-created calculator.
             Spree::Calculator::PercentOnLineItem.where( \
               calculable_type: "Spree::PromotionAction", calculable_id: promotion_action.id).delete_all
 
@@ -124,7 +124,6 @@ class Spree::PromotionBuilder
             promotion_action.save
             promotion_action_calculator.save
 
-            # TODO: Figure-out why not seeing this message in log file.
             Rails.logger.debug "Created promotion action calculator: #{promotion_action_calculator.pretty_inspect()}"
           end
         end
