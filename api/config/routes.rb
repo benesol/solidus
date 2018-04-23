@@ -14,6 +14,13 @@ Spree::Core::Engine.routes.draw do
       resources :promotion_actions, only: [:show, :create, :destroy]
       resources :promotion_codes, only: [:index]
     end
+    
+    resources :express_checkouts, only: [:create] do 
+      member do 
+        post :payment
+        post :confirm
+      end
+    end
 
     resources :products do
       resources :images
@@ -57,7 +64,7 @@ Spree::Core::Engine.routes.draw do
         put :complete
       end
     end
-
+    
     resources :variants do
       resources :images
     end

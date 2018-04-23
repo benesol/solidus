@@ -113,10 +113,6 @@ class Spree::PromotionBuilder
             # "---
             # :percent: !ruby/object:BigDecimal 18:0.24E2
             # "
-            # TODO: Figure-out why percentage is always set to 0.
-            #calculator_attrs = { "type" => calculator_type, "calculable_type" => calculable_type, \
-            #  "calculable_id" => promotion_action.id, "preferred_percent" => calculator_percentage }
-
             calculator_attrs = { "type" => calculator_type, "calculable_type" => calculable_type, \
               "calculable_id" => promotion_action.id, "preferred_percent" => calculator_percentage }
 
