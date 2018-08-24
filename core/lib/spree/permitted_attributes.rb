@@ -63,7 +63,10 @@ module Spree
 
     @@inventory_unit_attributes = [:shipment, :variant_id]
 
-    @@line_item_attributes = [:id, :variant_id, :quantity]
+    @@line_item_attributes = [
+      :id, :variant_id, :quantity, :price, :single_display_amount, :total, 
+      :display_total, :variant, :adjustments 
+    ]
 
     @@option_type_attributes = [:name, :presentation, :option_values_attributes]
 

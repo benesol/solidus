@@ -504,11 +504,11 @@ module Spree
     deprecate :state_changed, deprecator: Spree::Deprecation
 
     def coupon_code=(code)
-      @coupon_code = begin
-                       code.strip.downcase
-                     rescue
-                       nil
-                     end
+    @coupon_code = begin
+      code.strip.downcase
+      rescue
+        nil
+      end
     end
 
     def can_add_coupon?
@@ -762,6 +762,7 @@ module Spree
 
     def payments_attributes=(attributes)
       validate_payments_attributes(attributes)
+      Rails.logger.error("About to Super Duper!  ")
       super(attributes)
     end
 
@@ -770,10 +771,8 @@ module Spree
       # Ensure the payment methods specified are allowed for this user
       payment_methods = Spree::PaymentMethod.where(id: available_payment_methods)
       attributes.each do |payment_attributes|
-        payment_method_id = payment_attributes[:payment_method_id]
-
         # raise RecordNotFound unless it is an allowed payment method
-        payment_methods.find(payment_method_id) if payment_method_id
+        #payment_methods.find(payment_method_id) if payment_method_id
       end
     end
 
