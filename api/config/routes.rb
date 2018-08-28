@@ -17,7 +17,6 @@ Spree::Core::Engine.routes.draw do
     
     resources :express_checkouts, only: [:create] do 
       member do 
-        post :payment
         post :confirm
       end
     end

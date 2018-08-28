@@ -32,8 +32,30 @@ module Spree
       end
         
       def confirm
-        #authorize! :create, ExpressCheckout
-        # Doesn't need any input.  Make it so.
+        authorize! :submit, ExpressCheckout
+        
+        if can?(:admin, ExpressCheckout)
+          @order = Spree::Order.find_by_param!(params[:id])
+
+          # Proceed to Confirm
+          @order.next!
+          # Complete the payment.
+          our_payment = @order.unprocessed_payments.last
+          # This causes payment method(s) to run the charge.
+          our_payment.process!
+          # Checkout Payment Capture for 'check' payments and others that do not 'auto-capture'.
+          our_payment.capture!
+            
+          # Proceed to Complete
+          @order.complete!
+          @order.save!
+          
+          @orders = [@order]
+          
+          respond_with(@orders, default_template: :show, status: 200)
+        else 
+          invalid_resource!(@order)
+        end
       end
       
       # TODO: Have a 'cancel' method on delete if Customer decides they don't 
