@@ -65,7 +65,7 @@ class Spree::PromotionBuilder
       sendWarnMsg = true
     end
 
-    unless @promotion_actions.nil? || @promotion_actions.length == 0
+    unless @promotion_actions.nil? || @promotion_actions.keys.length == 0
       @promotion_actions.each do |action_key, action_value|
         promotion_action_attrs = Hash.new
         # Admittedly awkward, but this wasn't working via direct key access at runtime.                                             
@@ -81,7 +81,7 @@ class Spree::PromotionBuilder
 
         # TODO: Add this to Gem version in running Docker container...?
         Rails.logger.debug "Promotion Action Type: #{promotion_action.type}"
-        unless action_value["calculators"].nil? || action_value["calculators"].length == 0
+        unless action_value["calculators"].nil? || action_value["calculators"].keys.length == 0
           calculator_type = nil
           calculable_type = nil
           calculator_percentage = nil
@@ -160,7 +160,6 @@ class Spree::PromotionBuilder
   end
 
   def code_builder
-    self.class.code_builder_class.new(@promotion, @base_code, @number_of_codes)
     self.class.code_builder_class.new(
       Spree::PromotionCodeBatch.create!(
         promotion_id: @promotion.id,
