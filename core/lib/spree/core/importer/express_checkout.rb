@@ -6,7 +6,7 @@ module Spree
       class ExpressCheckout < Spree::Core::Importer::Order
         def self.import(user, params)
           params_string = PP.pp(params, '')
-          Rails.logger.error("ExpressCheckout importer params: #{params_string}")
+          Rails.logger.debug("ExpressCheckout importer params: #{params_string}")
           ActiveRecord::Base.transaction do
           
             # Check for createAndSubmit.  If present, that will modify behavior of request validation and 
@@ -43,7 +43,7 @@ module Spree
             if params.key?("order") and params[:order].key?("line_items")
               # Strip everything from the line_items hash except :variant_id, :quantity, :sku ??
               line_items_hash = Hash[(0...params[:order][:line_items].size).zip params[:order][:line_items]]
-              line_items_hash.select {|k,v| Rails.logger.error("key: #{k}, value: #{v}, sliced: #{v.slice(:variant_id, :quantity, :sku)}")}
+              #line_items_hash.select {|k,v| Rails.logger.error("key: #{k}, value: #{v}, sliced: #{v.slice(:variant_id, :quantity, :sku)}")}
               line_items_hash_filtered = line_items_hash.select {|k,v| v.slice(:variant_id, :quantity, :sku)}
               create_line_items_from_params(line_items_hash_filtered, order)
             end
@@ -56,7 +56,7 @@ module Spree
             # TODO: Apply 'coupon code' if present.  Need to test this works.
             if params.key?("coupon_code") && ((params["coupon_code"]).strip).length > 0
               order.coupon_code = params[:coupon_code].strip.downcase
-              Rails.logger.error("Attempting to apply coupon (#{order.coupon_code}) to order.")
+              Rails.logger.debug("Attempting to apply coupon (#{order.coupon_code}) to order: #{order.id}")
               coupon_handler = PromotionHandler::Coupon.new(order).apply
               #if coupon_handler.successful?
                 # ??
@@ -133,7 +133,7 @@ module Spree
                   if !order.user.wallet.default_wallet_payment_source.nil?
                     Rails.logger.debug("order # #{order.id} Should use default credit card: #{PP.pp(order.user.wallet.default_wallet_payment_source)}")
                   else
-                    Rails.logger.error("No credit card specified and no default card in wallet.  No way to pay.")
+                    Rails.logger.error("order # #{order.id} No credit card specified and no default card in wallet.  No way to pay.")
                     raise ArgumentError, "No credit card specified and no default "\
                       "card in wallet to pay with.  Please specify credit card info in Express Checkout API call."
                   end
@@ -185,7 +185,7 @@ module Spree
                 end
               end
 
-              Rails.logger.error("order: #{order.inspect}")
+              Rails.logger.debug("order: #{order.inspect}")
               
               filtered_payments_attributes = [
                 { 
