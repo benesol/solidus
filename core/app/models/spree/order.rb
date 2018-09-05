@@ -762,7 +762,6 @@ module Spree
 
     def payments_attributes=(attributes)
       validate_payments_attributes(attributes)
-      Rails.logger.error("About to Super Duper!  ")
       super(attributes)
     end
 

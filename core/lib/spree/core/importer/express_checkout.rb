@@ -53,7 +53,7 @@ module Spree
               create_adjustments_from_params(params[:adjustments], order)
             end
             
-            # TODO: Apply 'coupon code' if present.  Need to test this works.
+            # Apply 'coupon code' if present.
             if params.key?("coupon_code") && ((params["coupon_code"]).strip).length > 0
               order.coupon_code = params[:coupon_code].strip.downcase
               Rails.logger.debug("Attempting to apply coupon (#{order.coupon_code}) to order: #{order.id}")
@@ -111,17 +111,24 @@ module Spree
             # Should be able to look up the payment type of the payment_method_id and 
             # see that it is of type 'check'.
 
-            payment_method = Spree::PaymentMethod.find(params[:payment_method_id])
+            # Set payment_method to 'Externally Paid' check payment method, IF order.total <= 0.0
+            if order.total <= 0.0
+              externally_paid_payment_method = Spree::PaymentMethod.find_by!(name: 'Externally Paid')
+              Rails.logger.debug("order # #{order.id} externally_paid_payment_method: #{externally_paid_payment_method.inspect}")
+              payment_method = externally_paid_payment_method
+            else 
+              payment_method = Spree::PaymentMethod.find(params[:payment_method_id])
+            end
 
             # Just add payment method to wallet, if exists.  Otherwise 
             # use the default payment method, if exists, otherwise, err-out 
             # indicating a payment method needs to be specified.
             Rails.logger.debug("order # #{order.id} payment_method: #{payment_method}")
-            if defined? payment_method 
+            if defined? payment_method
               Rails.logger.debug("order # #{order.id} payment_method.type: #{payment_method.type} / params[:payment_source]: #{params[:payment_source].inspect}")
               # TODO: payment_source can be null if using default source in wallet
               wallet_payment_source = nil
-              if defined? params[:payment_source] and !params[:payment_source].nil?
+              if defined? params[:payment_source] and !params[:payment_source].nil? and !payment_method.is_a?(Spree::PaymentMethod::Check)
                 payment_source_attributes = params[:payment_source].to_unsafe_h
                 payment_source_attributes[:id] = nil
               
@@ -156,7 +163,6 @@ module Spree
                   end
                   order.save!
                 end
-
               end
               
               # 2. Try to look-up wallet card (that might have just been created) by: 
@@ -172,6 +178,8 @@ module Spree
                   wallet_payment_source_id: wallet_payment_source.id,
                   verification_value: nil
                 }
+              elsif payment_method.is_a?(Spree::PaymentMethod::Check)
+                # Do nothing here.
               else 
                 # Try to get default wallet payment source id, if exists.
                 wallet_payment_source = order.user.wallet.default_wallet_payment_source
@@ -181,7 +189,8 @@ module Spree
                     verification_value: nil
                   }
                 else
-                  # TODO: No default wallet payment source.  This is an error.
+                  # TODO: No default wallet payment source.  This is an error, 
+                  #       unless order total <= 0.00
                 end
               end
 
@@ -193,6 +202,16 @@ module Spree
                   source_attributes: payment_source_attributes
                 }
               ]
+              
+              if payment_method.is_a?(Spree::PaymentMethod::Check)
+                Rails.logger.debug("order # #{order.id} Payment Method should be by check.")
+                filtered_payments_attributes = [
+                  { 
+                    amount: order.total,
+                    payment_method_id: payment_method.id
+                  }
+                ]
+              end
               
               Rails.logger.debug("order # #{order.id} filtered_payments_attributes: #{filtered_payments_attributes}")
               Rails.logger.debug("order # #{order.id} payment_method.type: #{payment_method.type}")

@@ -37,15 +37,19 @@ module Spree
         if can?(:admin, ExpressCheckout)
           @order = Spree::Order.find_by_param!(params[:id])
 
-          # Proceed to Confirm
-          @order.next!
+          Rails.logger.debug("confirm order: #{@order.inspect}")
+          if @order.state == 'payment'
+            # Proceed to Confirm
+            @order.next!
+          end
+
           # Complete the payment.
           our_payment = @order.unprocessed_payments.last
           # This causes payment method(s) to run the charge.
           our_payment.process!
           # Checkout Payment Capture for 'check' payments and others that do not 'auto-capture'.
           our_payment.capture!
-            
+
           # Proceed to Complete
           @order.complete!
           @order.save!
