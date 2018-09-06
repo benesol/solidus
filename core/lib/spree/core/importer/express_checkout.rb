@@ -112,7 +112,7 @@ module Spree
             # see that it is of type 'check'.
 
             # Set payment_method to 'Externally Paid' check payment method, IF order.total <= 0.0
-            if order.total <= 0.0
+            if order.total <= 0.00
               externally_paid_payment_method = Spree::PaymentMethod.find_by!(name: 'Externally Paid')
               Rails.logger.debug("order # #{order.id} externally_paid_payment_method: #{externally_paid_payment_method.inspect}")
               payment_method = externally_paid_payment_method
