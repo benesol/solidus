@@ -42,6 +42,8 @@ module Spree
             order.store ||= Spree::Store.default
             order.associate_user!(user)
             order.save!
+
+=begin
             
             # Process 'line_items' / 'adjustments' same as Order importer (our base class)
             # line_items need to have variant children
@@ -70,7 +72,6 @@ module Spree
               #end
             end
 
-=begin
             # Advance order state from 'cart' to 'address'
             order.next!
             
