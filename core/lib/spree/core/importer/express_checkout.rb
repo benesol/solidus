@@ -70,6 +70,7 @@ module Spree
               #end
             end
 
+=begin
             # Advance order state from 'cart' to 'address'
             order.next!
             
@@ -259,6 +260,7 @@ module Spree
             
             # Proceed to Complete
             order.complete!
+=end
             order.save!
 
             return order
