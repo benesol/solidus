@@ -108,6 +108,8 @@ module Spree
             rescue StandardError => e
                 Rails.logger.error("order: #{order.id} unable to add line item of variant_id: #{line_item[:variant_id]}, error message: #{e.message}, backtrace: #{e.backtrace.inspect}")
                 #raise e
+                # TODO: Next line temporary to skip line_item.save! when there is no line_item object
+                next
             end
             # Looks like all details we care about are in the line_item object.
             # Perhaps we forget about the 'extra_params', since they are nil or 0 anyways?
