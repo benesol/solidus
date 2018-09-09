@@ -35,8 +35,11 @@ module Spree
             
             order_create_params = params.slice :currency
             # TODO: Start passing store_id in as part of call from C# SolidusProvider?
-            order_create_params[:store_id] = Spree::Store.default.id
+            #       Get Forbidden Attributes error, so maybe that's why wasn't passing in
+            #       store_id ?
+            #order_create_params[:store_id] = Spree::Store.default.id
             order = Spree::Order.create! order_create_params
+            order.store ||= Spree::Store.default
             order.associate_user!(user)
             order.save!
             
