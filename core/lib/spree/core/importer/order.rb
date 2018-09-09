@@ -96,17 +96,22 @@ module Spree
         end
 
         def self.create_line_items_from_params(line_items_hash, order)
-          Rails.logger.error("importing express_checkout... order importer creating line items")
+          Rails.logger.debug("order: #{order.id} importing express_checkout... order importer creating line items")
           return {} unless line_items_hash
           line_items_hash.each_key do |k|
             extra_params = line_items_hash[k].except(:variant_id, :quantity, :sku)
-            Rails.logger.error("importing express_checkout... order importer ensuring variant id from params: #{line_items_hash[k]}")
+            Rails.logger.debug("order: #{order.id} importing express_checkout... order importer ensuring variant id from params: #{line_items_hash[k]}")
             line_item = ensure_variant_id_from_params(line_items_hash[k])
-            Rails.logger.error("importing express_checkout... order importer adding variant: #{line_item[:variant_id]} to order ")
-            line_item = order.contents.add(Spree::Variant.find(line_item[:variant_id]), line_item[:quantity])
+            Rails.logger.debug("order: #{order.id} importing express_checkout... order importer adding variant: #{line_item[:variant_id]} to order ")
+            begin
+              line_item = order.contents.add(Spree::Variant.find(line_item[:variant_id]), line_item[:quantity])
+            rescue StandardError => e
+                Rails.logger.error("order: #{order.id} unable to add line item of variant_id: #{line_item[:variant_id]}, error message: #{e.message}, backtrace: #{e.backtrace.inspect}")
+                raise e
+            end
             # Looks like all details we care about are in the line_item object.
             # Perhaps we forget about the 'extra_params', since they are nil or 0 anyways?
-            Rails.logger.error("adding to order line_item: #{line_item.inspect}")
+            Rails.logger.debug("adding to order line_item: #{line_item.inspect}")
             # Raise any errors with saving to prevent import succeeding with line items failing silently.
             #if extra_params.present?
             #  Rails.logger.error("importing express_checkout... order importer adding extra params to order: #{extra_params}")
