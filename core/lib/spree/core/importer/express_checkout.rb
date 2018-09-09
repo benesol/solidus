@@ -34,6 +34,8 @@ module Spree
             end
             
             order_create_params = params.slice :currency
+            # TODO: Start passing store_id in as part of call from C# SolidusProvider?
+            order_create_params[:store_id] = Spree::Store.default.id
             order = Spree::Order.create! order_create_params
             order.associate_user!(user)
             order.save!
