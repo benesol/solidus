@@ -34,6 +34,8 @@ module Spree
             end
             
             order_create_params = params.slice :currency
+            # TODO: Start passing currency in as part of call from C# SolidusProvider
+            order_create_params[:currency] = 'CAD'
             # TODO: Start passing store_id in as part of call from C# SolidusProvider?
             #       Get Forbidden Attributes error, so maybe that's why wasn't passing in
             #       store_id ?
@@ -43,8 +45,6 @@ module Spree
             order.associate_user!(user)
             order.save!
 
-=begin
-            
             # Process 'line_items' / 'adjustments' same as Order importer (our base class)
             # line_items need to have variant children
             if params.key?("order") and params[:order].key?("line_items")
@@ -261,7 +261,7 @@ module Spree
             
             # Proceed to Complete
             order.complete!
-=end
+
             order.save!
 
             return order
