@@ -32,16 +32,18 @@ module Spree
               # TODO: Raise error condition.
               Rails.logger.error("Invalid ExpressCheckout call: user_id nor info to create a new account specified.")
             end
-            
+
+            # If this gets set to non-nil, just blows-up on validation.            
             order_create_params = params.slice :currency
-            # TODO: Start passing currency in as part of call from C# SolidusProvider
-            order_create_params[:currency] = 'CAD'
+            #order_create_params[:currency] = 'CAD'
             # TODO: Start passing store_id in as part of call from C# SolidusProvider?
             #       Get Forbidden Attributes error, so maybe that's why wasn't passing in
             #       store_id ?
             #order_create_params[:store_id] = Spree::Store.default.id
             order = Spree::Order.create! order_create_params
             order.store ||= Spree::Store.default
+            # TODO: Start passing currency in as part of call from C# SolidusProvider
+            order.currency = 'CAD'
             order.associate_user!(user)
             order.save!
 
