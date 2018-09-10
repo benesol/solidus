@@ -32,7 +32,8 @@ module Spree
           @order = Spree::Core::Importer::Order.import(determine_order_user, order_params)
           respond_with(@order, default_template: :show, status: 201)
         else
-          @order = Spree::Order.create!(user: current_api_user, store: current_store)
+          # TODO: We need to un-hardcode 'currency' before supporting multiple countries
+          @order = Spree::Order.create!(user: current_api_user, store: current_store, currency: 'CAD')
           if OrderUpdateAttributes.new(@order, order_params).apply
             respond_with(@order, default_template: :show, status: 201)
           else
