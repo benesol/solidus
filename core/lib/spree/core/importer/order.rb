@@ -15,7 +15,7 @@ module Spree
             order.store ||= Spree::Store.default
             order.associate_user!(user)
             order.save!
-            Rails.logger.debug("order: #{order.id} created with currency: #{create_params[:currency]}"")
+            Rails.logger.debug("order: #{order.id} created with currency: #{create_params[:currency]}")
 
             shipments_attrs = params.delete(:shipments_attributes)
 
