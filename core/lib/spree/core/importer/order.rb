@@ -13,8 +13,7 @@ module Spree
             create_params = params.slice :currency
             order = Spree::Order.create! create_params
             order.store ||= Spree::Store.default
-            # TODO: Un-hardcode this to support multiple countries.
-            order.currency = 'CAD'
+            order.currency = order.store.default_currency
             order.associate_user!(user)
             order.save!
             Rails.logger.debug("order: #{order.id} created with currency: #{create_params[:currency]}")
