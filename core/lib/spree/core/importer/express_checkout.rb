@@ -41,9 +41,10 @@ module Spree
             #       store_id ?
             #order_create_params[:store_id] = Spree::Store.default.id
             order = Spree::Order.create! order_create_params
+            #Rails.logger.error("initial order.store: #{order.store.inspect}")
             order.store ||= Spree::Store.default
-            # TODO: Start passing currency in as part of call from C# SolidusProvider
-            order.currency = 'CAD'
+            #Rails.logger.error("order.store: #{order.store.inspect}")
+            order.currency = order.store.default_currency
             order.associate_user!(user)
             order.save!
 
