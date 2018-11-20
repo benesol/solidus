@@ -14,6 +14,10 @@ module Spree
         # Optionally perform entire checkout in single call for 
         # Subscription Renewal use case.  Payment type for that is 
         # 'check' and Customer will already have an account.
+        #Rails.logger.debug("Processing Express Checkout create() with request: #{request.inspect}")
+        #Rails.logger.debug("HTTP Headers: #{request.headers.inspect}")
+        #Rails.logger.debug("HTTP_SPREE_STORE: #{request.headers['HTTP_SPREE_STORE']}")
+        #Rails.logger.debug("Processing Express Checkout create() for store: #{current_store.inspect}")
         
         if can?(:admin, ExpressCheckout)
           @order = Spree::Core::Importer::ExpressCheckout.import(determine_express_checkout_user, express_checkout_params)
@@ -39,7 +43,54 @@ module Spree
 
           Rails.logger.debug("confirm order: #{@order.inspect}")
           if @order.state == 'payment'
-            # Proceed to Confirm
+            # TODO: Add payment method if novel credit card info provided
+            @novel_credit_card = params[:payment_source]
+            #Rails.logger.debug("Processing Express Checkout Confirm with params: #{params.inspect}")
+            #Rails.logger.debug("Express Checkout confirm order novel credit card?: #{@novel_credit_card.inspect}")
+            #Rails.logger.debug("Express Checkout Order: #{@order.inspect}")
+
+            
+            unless @novel_credit_card.nil?
+              # Proceed to Confirm
+              # TODO: Set order.unprocessed.payments.each : payment.payment_method_id
+              # TODO: Create new wallet entry:
+              # Create Solidus credit card object from parameters and stash in wallet.
+              @wallet_payment_source = @order.user.wallet.add(
+                Spree::CreditCard.new(
+                  month: params[:payment_source][:month],
+                  year: params[:payment_source][:month],
+                  number: params[:payment_source][:last_digits],
+                  cc_type: params[:payment_source][:cc_type],
+                  name: params[:payment_source][:name],
+                  gateway_customer_profile_id: params[:payment_source][:gateway_customer_profile_id],
+                  gateway_payment_profile_id: params[:payment_source][:gateway_payment_profile_id]
+                )
+              )
+              
+              Rails.logger.debug("wallet_payment_source.id: #{@wallet_payment_source.id}")
+              @payment_source_attributes = {
+                wallet_payment_source_id: @wallet_payment_source.id,
+                verification_value: nil
+              }
+              
+              filtered_payments_attributes = [
+                { 
+                  amount: @order.total, 
+                  source_attributes: {
+                    wallet_payment_source_id: @wallet_payment_source.id,
+                    verification_value: nil
+                  }
+                }
+              ]
+              
+              OrderUpdateAttributes.new(@order, payments_attributes: filtered_payments_attributes).apply
+
+              @order.unprocessed_payments.each do |payment|
+                payment.payment_method_id = params[:payment_method_id]
+              end
+
+            end
+
             @order.next!
           end
 
@@ -47,7 +98,7 @@ module Spree
           our_payment = @order.unprocessed_payments.last
           # Validate that payment matches final order total- coupon(s) might 
           # have been applied, stealthily.
-          Rails.logger.debug("confirm payment: #{our_payment.inspect}")
+          #Rails.logger.debug("confirm payment: #{our_payment.inspect}")
           # TODO: Also check that payment amount is at least as much as credit card processor 
           #       minimum.  If not, set to 'External Payment'/check and log an error to 
           #       trigger an alert to Sales/Marketing that we are providing freebies.
@@ -65,7 +116,7 @@ module Spree
               our_payment.save!
             end
 
-          elsif our_payment.amount != @order.total 
+          elsif our_payment.amount != @order.total
             our_payment.amount = @order.total
           end
           

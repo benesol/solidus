@@ -4,6 +4,9 @@ module Spree
   module Core
     module Importer
       class ExpressCheckout < Spree::Core::Importer::Order
+        
+        class UnableToAdvanceOrderState < StandardError; end
+          
         def self.import(user, params)
           params_string = PP.pp(params, '')
           Rails.logger.debug("ExpressCheckout importer params: #{params_string}")
@@ -35,7 +38,6 @@ module Spree
 
             # If this gets set to non-nil, just blows-up on validation.            
             order_create_params = params.slice :currency
-            #order_create_params[:currency] = 'CAD'
             # TODO: Start passing store_id in as part of call from C# SolidusProvider?
             #       Get Forbidden Attributes error, so maybe that's why wasn't passing in
             #       store_id ?
@@ -111,12 +113,16 @@ module Spree
             
             # Advance Order State (from Address to Delivery)
             order.next!
-            
+
             # Advance Order State (from Delivery to Payment)
-            Rails.logger.debug("order: #{order.inspect}")
-            Rails.logger.debug("order # #{order.id} unprocessed_payments: #{order.unprocessed_payments.inspect}")
+            #Rails.logger.debug("order: #{order.inspect}")
+            #Rails.logger.debug("order # #{order.id} unprocessed_payments: #{order.unprocessed_payments.inspect}")
+            # Note: if the following 'inspect' call is removed, several Express Checkout integration 
+            # tests will fail.  Unsure why this is.
+            stop_the_failures = order.unprocessed_payments.inspect
+            
             order.next!
-    
+            
             # TODO: If not subscription renewal, Checkout Payment Assign with payment as credit card
             # Should be able to look up the payment type of the payment_method_id and 
             # see that it is of type 'check'.
@@ -133,7 +139,7 @@ module Spree
             # Just add payment method to wallet, if exists.  Otherwise 
             # use the default payment method, if exists, otherwise, err-out 
             # indicating a payment method needs to be specified.
-            Rails.logger.debug("order # #{order.id} payment_method: #{payment_method}")
+            #Rails.logger.debug("order # #{order.id} payment_method: #{payment_method}")
             if defined? payment_method
               Rails.logger.debug("order # #{order.id} payment_method.type: #{payment_method.type} / params[:payment_source]: #{params[:payment_source].inspect}")
               # TODO: payment_source can be null if using default source in wallet
@@ -199,8 +205,16 @@ module Spree
                     verification_value: nil
                   }
                 else
-                  # TODO: No default wallet payment source.  This is an error, 
-                  #       unless order total <= 0.00
+                  unless create_and_submit_one_call
+                    # Express Checkout multi-call, 1st call, w/o payment info in request and 
+                    # no payment method in Wallet, so just assume caller will provide payment 
+                    # info in payload to the Express Checkout Confirm call.
+                    Rails.logger.debug("order # #{order.id}, state: #{order.state} payment_method: NOT YET DEFINED.  SHOULD BE PASSED IN PAYLOAD TO CONFIRM CALL.")
+                    return order
+                  end
+                  # TODO: No default wallet payment source.  This is an error if 1-call  
+                  #       Express Checkout usage, unless order total <= 0.00
+                  #       Ought to raise an error of some sort.
                 end
               end
 
@@ -223,8 +237,8 @@ module Spree
                 ]
               end
               
-              Rails.logger.debug("order # #{order.id} filtered_payments_attributes: #{filtered_payments_attributes}")
-              Rails.logger.debug("order # #{order.id} payment_method.type: #{payment_method.type}")
+              #Rails.logger.debug("order # #{order.id} filtered_payments_attributes: #{filtered_payments_attributes}")
+              #Rails.logger.debug("order # #{order.id} payment_method.type: #{payment_method.type}")
               if defined? payment_method.type and 
                 payment_method.type == "Spree::PaymentMethod::Check"
                 # TODO: If is subscription renewal, Checkout Payment Assign with payment as 'check'?
