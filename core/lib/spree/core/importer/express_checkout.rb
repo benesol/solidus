@@ -119,6 +119,11 @@ module Spree
             #Rails.logger.debug("order # #{order.id} unprocessed_payments: #{order.unprocessed_payments.inspect}")
             # Note: if the following 'inspect' call is removed, several Express Checkout integration 
             # tests will fail.  Unsure why this is.
+            # TODO: Figure-out why 'this is' and make it no longer the case.
+            # Get this error if following line commented-out: 
+            # StateMachines::InvalidTransition (Cannot transition state via :next from :delivery 
+            # (Reason(s): Payments payment method can't be blank)):
+            Rails.logger.debug("How many unprocessed payments?: #{order.unprocessed_payments.count}")
             stop_the_failures = order.unprocessed_payments.inspect
             
             order.next!
@@ -188,22 +193,38 @@ module Spree
               #   order.user.wallet.wallet_payment_sources / then go through array looking for match
               # 3. If not in wallet, then create card and add to wallet.
               # 4. Set payment_source_attributes.wallet_payment_source_id as such
-              
-              if !wallet_payment_source.nil?
-                payment_source_attributes = {
-                  wallet_payment_source_id: wallet_payment_source.id,
-                  verification_value: nil
-                }
-              elsif payment_method.is_a?(Spree::PaymentMethod::Check)
-                # Do nothing here.
+
+              filtered_payments_attributes = [ ]
+              if payment_method.is_a?(Spree::PaymentMethod::Check)
+                filtered_payments_attributes = [
+                  { 
+                    amount: order.total,
+                    payment_method_id: payment_method.id
+                  }
+                ]
+              elsif !wallet_payment_source.nil?
+                filtered_payments_attributes = [
+                  { 
+                    amount: order.total,
+                    source_attributes:  {
+                      wallet_payment_source_id: wallet_payment_source.id,
+                      verification_value: nil
+                    }
+                  }
+                ]
               else 
                 # Try to get default wallet payment source id, if exists.
                 wallet_payment_source = order.user.wallet.default_wallet_payment_source
                 if !wallet_payment_source.nil?
-                  payment_source_attributes = {
-                    wallet_payment_source_id: wallet_payment_source.id,
-                    verification_value: nil
-                  }
+                  filtered_payments_attributes = [
+                    { 
+                      amount: order.total,
+                      source_attributes:  {
+                        wallet_payment_source_id: wallet_payment_source.id,
+                        verification_value: nil
+                      }
+                    }
+                  ]
                 else
                   unless create_and_submit_one_call
                     # Express Checkout multi-call, 1st call, w/o payment info in request and 
@@ -218,47 +239,25 @@ module Spree
                 end
               end
 
-              Rails.logger.debug("order: #{order.inspect}")
-              
-              filtered_payments_attributes = [
-                { 
-                  amount: order.total,
-                  source_attributes: payment_source_attributes
-                }
-              ]
-              
-              if payment_method.is_a?(Spree::PaymentMethod::Check)
-                Rails.logger.debug("order # #{order.id} Payment Method should be by check.")
-                filtered_payments_attributes = [
-                  { 
-                    amount: order.total,
-                    payment_method_id: payment_method.id
-                  }
-                ]
-              end
-              
-              #Rails.logger.debug("order # #{order.id} filtered_payments_attributes: #{filtered_payments_attributes}")
-              #Rails.logger.debug("order # #{order.id} payment_method.type: #{payment_method.type}")
               if defined? payment_method.type and 
                 payment_method.type == "Spree::PaymentMethod::Check"
                 # TODO: If is subscription renewal, Checkout Payment Assign with payment as 'check'?
-                # This fails?
                 order.payments_attributes=filtered_payments_attributes
               else
                 # Some other type of payment...
                 # This method will execute the PaymentCreate code.
                 OrderUpdateAttributes.new(order, payments_attributes: filtered_payments_attributes).apply
-
-                order.unprocessed_payments.each do |payment|
-                  payment.payment_method_id = params[:payment_method_id]
-                end
-
               end
               
+              # TODO: Remove the 'phantom' empty payments that get invalidated for each order.
+              #       Then can get rid of this work-around.
+              order.unprocessed_payments.each do |payment|
+                payment.payment_method_id = params[:payment_method_id]
+              end
+
             end
             
             unless create_and_submit_one_call
-              Rails.logger.debug("order # #{order.id} Did everything except submit Express Checkout order.")
               order.save!
               return order
             end
@@ -278,7 +277,6 @@ module Spree
             
             # Proceed to Complete
             order.complete!
-
             order.save!
 
             return order
