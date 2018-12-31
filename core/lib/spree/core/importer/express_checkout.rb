@@ -257,6 +257,27 @@ module Spree
 
             end
             
+            if order.total == 0.0
+              # Not charging anything so pitch all the payments to avoid 
+              # 'no payment source specified' errors when saving the Order.
+              # TODO: Put this at beginning of function to be rid of annoying 
+              #       empty default payments?
+              Rails.logger.debug("Deleting payments for Order: #{order.id} as total $0.00.")
+              order.unprocessed_payments.each do |payment|
+                payment.destroy
+              end
+            end
+            
+            # This was throwing an error later when invalidating payments about 
+            # "Can't modify frozen Hash"
+            # order.unprocessed_payments.each do |payment|
+            #   if payment.amount == 0.0
+            #     Rails.logger.debug("Deleting payment: #{payment.id} of $0.00 for Order: #{order.id}")
+            #     # Remove the 'phantom' empty payments that get invalidated for each order.
+            #     payment.destroy
+            #   end
+            # end
+            
             unless create_and_submit_one_call
               order.save!
               return order
